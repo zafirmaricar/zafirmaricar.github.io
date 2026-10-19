@@ -1,6 +1,8 @@
 // WebGL renderer: rocks with procedural stone shading and bevel lighting, and
 // the fluid as screen-space metaballs (particles splatted into a half-res
-// density buffer, then thresholded and shaded in a full-screen pass).
+// density buffer, then thresholded and shaded in a full-screen pass). The
+// stone's noise is baked once into a tiling texture so phones don't evaluate
+// fbm per pixel every frame.
 (function (root) {
   'use strict';
 
@@ -56,39 +58,60 @@ precision mediump float;
 varying vec4 v_col;
 void main() { gl_FragColor = v_col; }`;
 
-  const ROCK_FS = PRECISION + `
-varying vec2 v_world;
-varying vec2 v_normal;
-varying float v_edge;
-uniform float u_shadow;
+  // Bakes the stone noise into a 512x512 RGBA texture that tiles: every
+  // lattice repeats a whole number of times across the texture.
+  //   r: large fbm, tile 2048 px   g: mid fbm, tile 512 px
+  //   b: vein fbm, tile 1024 px    a: fine noise, tile 512 px
+  const NOISE_FS = PRECISION + `
+varying vec2 v_uv;
 float hash(vec2 p) {
   p = fract(p * vec2(123.34, 456.21));
   p += dot(p, p + 45.32);
   return fract(p.x * p.y);
 }
-float noise(vec2 p) {
+float pnoise(vec2 p, float period, vec2 salt) {
   vec2 i = floor(p), f = fract(p);
   vec2 u = f * f * (3.0 - 2.0 * f);
-  return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x),
-             mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
+  vec2 j = mod(i + 1.0, period);
+  i = mod(i, period);
+  return mix(mix(hash(i + salt), hash(vec2(j.x, i.y) + salt), u.x),
+             mix(hash(vec2(i.x, j.y) + salt), hash(j + salt), u.x), u.y);
 }
-float fbm(vec2 p) {
+float pfbm(vec2 uv, float cells, vec2 salt) {
   float v = 0.0, a = 0.5;
-  for (int i = 0; i < 5; i++) { v += a * noise(p); p *= 2.03; a *= 0.5; }
+  for (int i = 0; i < 5; i++) {
+    v += a * pnoise(uv * cells, cells, salt);
+    cells *= 2.0; a *= 0.5; salt += vec2(17.0, 59.0);
+  }
   return v;
 }
 void main() {
+  gl_FragColor = vec4(
+    pfbm(v_uv, 12.0, vec2(0.0)),
+    pfbm(v_uv, 16.0, vec2(7.0, 3.0)),
+    pfbm(v_uv, 12.0, vec2(3.0, 11.0)),
+    pnoise(v_uv * 230.0, 230.0, vec2(5.0, 29.0)));
+}`;
+
+  const ROCK_FS = PRECISION + `
+varying vec2 v_world;
+varying vec2 v_normal;
+varying float v_edge;
+uniform float u_shadow;
+uniform sampler2D u_noise;
+void main() {
   if (u_shadow > 0.5) { gl_FragColor = vec4(0.0, 0.0, 0.0, 0.38); return; }
   vec2 w = v_world;
-  float large = fbm(w * 0.006);
-  float mid = fbm(w * 0.03 + 7.0);
-  float fine = noise(w * 0.45);
+  float large = texture2D(u_noise, w / 2048.0).r;
+  vec4 m = texture2D(u_noise, w / 512.0);
+  float mid = m.g;
+  float fine = m.a;
   vec3 dark = vec3(0.16, 0.17, 0.19);
   vec3 light = vec3(0.36, 0.36, 0.37);
   vec3 col = mix(dark, light, smoothstep(0.25, 0.8, large * 0.6 + mid * 0.5));
   col *= 0.9 + 0.18 * fine;
   // Thin mineral veins.
-  float vein = abs(fbm(w * 0.012 + 3.0) - 0.5);
+  float vein = abs(texture2D(u_noise, w / 1024.0).b - 0.5);
   col = mix(col * 0.75, col, smoothstep(0.0, 0.025, vein));
   // Bevel: rim is lit from the top left, face stays darker for text contrast.
   float e = clamp(v_edge, 0.0, 1.0);
@@ -241,6 +264,14 @@ void main() {
       this.canvas = canvas;
       this.gl = gl;
       this.particleSize = (opts && opts.particleSize) || 22;
+      this.maxParticles = (opts && opts.maxParticles) || 4096;
+      this.init();
+    }
+
+    // Creates every GL resource. Called again after a lost context is
+    // restored, since the old objects are gone with it.
+    init() {
+      const gl = this.gl;
       this.rock = program(gl, ROCK_VS, ROCK_FS);
       this.flat = program(gl, FLAT_VS, FLAT_FS);
       this.point = program(gl, POINT_VS, POINT_FS);
@@ -252,16 +283,45 @@ void main() {
       this.detailBuf = gl.createBuffer();
       this.detailVerts = 0;
       this.partBuf = gl.createBuffer();
-      this.partData = new Float32Array(3 * ((opts && opts.maxParticles) || 4096));
+      this.partData = new Float32Array(3 * this.maxParticles);
       this.quadBuf = gl.createBuffer();
       gl.bindBuffer(gl.ARRAY_BUFFER, this.quadBuf);
       gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+      this.noiseTex = this.bakeNoise(512);
       this.fbo = null;
       this.width = 0; this.height = 0; this.dpr = 1;
     }
 
+    bakeNoise(size) {
+      const gl = this.gl;
+      const tex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, size, size, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+      const fb = gl.createFramebuffer();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+      const N = program(gl, QUAD_VS, NOISE_FS);
+      gl.viewport(0, 0, size, size);
+      gl.disable(gl.BLEND);
+      gl.useProgram(N.p);
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.quadBuf);
+      gl.enableVertexAttribArray(N.a.a_q);
+      gl.vertexAttribPointer(N.a.a_q, 2, gl.FLOAT, false, 0, 0);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      gl.disableVertexAttribArray(N.a.a_q);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.deleteFramebuffer(fb);
+      gl.deleteProgram(N.p);
+      return tex;
+    }
+
+    // Returns true when the canvas was reallocated (which clears it).
     resize(w, h, dpr) {
-      if (w === this.width && h === this.height && dpr === this.dpr) return;
+      if (w === this.width && h === this.height && dpr === this.dpr) return false;
       this.width = w; this.height = h; this.dpr = dpr;
       this.canvas.width = Math.round(w * dpr);
       this.canvas.height = Math.round(h * dpr);
@@ -280,6 +340,7 @@ void main() {
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       this.fbo = { fb, tex, w: fw, h: fh };
+      return true;
     }
 
     // rocks: static rocks; each may have holes (polygons with a centre hx, hy)
@@ -351,6 +412,10 @@ void main() {
       gl.useProgram(R.p);
       gl.uniform2f(R.u.u_scroll, scrollX, scrollY);
       gl.uniform2f(R.u.u_res, this.width, this.height);
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, this.noiseTex);
+      gl.uniform1i(R.u.u_noise, 1);
+      gl.activeTexture(gl.TEXTURE0);
       return R;
     }
 

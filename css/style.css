@@ -13,7 +13,14 @@
 *, *::before, *::after { box-sizing: border-box; }
 [hidden] { display: none !important; }
 
-html { background: #0b1320; }
+html {
+  background: #0b1320;
+  /* No double-tap zoom, so two quick taps on a rock break it. Pinch zoom
+     still works. */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+a, button { -webkit-tap-highlight-color: rgba(124, 196, 255, 0.25); }
 
 body {
   margin: 0;
@@ -28,16 +35,27 @@ body {
   background-attachment: fixed;
 }
 
-#sim {
-  position: fixed;
-  inset: 0;
-  width: 100vw;
-  height: 100vh;
+/* The canvas scrolls with the page inside this page-sized layer; main.js
+   moves it to the viewport each frame and sets its height. */
+#sim-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  overflow: hidden;
   z-index: 0;
   pointer-events: none;
   display: none;
 }
-.sim-on #sim { display: block; }
+.sim-on #sim-layer { display: block; }
+#sim {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+  width: 100%;
+  will-change: transform;
+}
 
 .wrap {
   position: relative;
@@ -203,6 +221,8 @@ h1.rock.resume-title { font-size: 2rem; margin: 0; padding: 16px 28px; }
 }
 .resume-fallback { padding: 24px; color: #222; text-shadow: none; }
 .resume-fallback a { color: #0b5cad; }
+.resume-page { display: none; }
+.resume-page img { display: block; width: 100%; height: auto; border-radius: 10px; }
 
 .site-footer { margin-bottom: 96px; padding: 14px 22px; font-size: 0.85rem; color: var(--muted); }
 .site-footer.rock { width: fit-content; padding: 14px 22px; }
@@ -270,6 +290,7 @@ h1.rock.resume-title { font-size: 2rem; margin: 0; padding: 16px 28px; }
   .resume-frame { height: 70vh; min-height: 420px; }
 }
 
-/* Browsers without an inline PDF viewer (e.g. Android Chrome) only show the
-   fallback link, so the viewer rock shrinks to fit it. */
-.no-pdf .resume-frame { height: auto; min-height: 0; }
+/* Phones, and browsers without an inline PDF viewer, get an image of the
+   page that opens the PDF when tapped. */
+.no-pdf .resume-frame { display: none; }
+.no-pdf .resume-page { display: block; }

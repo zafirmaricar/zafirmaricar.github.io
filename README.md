@@ -12,7 +12,7 @@ on the same spot breaks that chunk off. The chunk carries the
 text it covered, falls as a rigid body, bounces off the rocks below and pushes
 the water aside until it drops off the page. "Repair rocks" restores everything.
 The simulation runs at a fixed 60 steps per second, so high-refresh screens
-don't speed it up.
+don't speed it up and 30 Hz screens don't slow it down.
 
 ## Structure
 
@@ -24,6 +24,7 @@ don't speed it up.
 - `js/fracture.js`: cracks, broken-off chunks (rigid bodies with the panel text cloned and clipped) and per-panel damage
 - `js/main.js`: tabs, rain, pointer input and the 60 fps main loop
 - `assets/docs/Zafir_Maricar_Resume.pdf`: the resume shown on the Resume tab
+- `assets/img/resume.webp`: an image of the resume page (1192×1684), shown instead of the PDF viewer on phones and in browsers without one. Re-render it when the PDF changes.
 
 Any element with the class `rock` becomes a collider automatically.
 

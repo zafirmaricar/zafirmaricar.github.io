@@ -41,18 +41,47 @@
       rock.cracks = [];
       const s = this.damage.get(el);
       if (!s) return;
+      // Damage is stored relative to the panel, so after a reflow (e.g. the
+      // phone was rotated) it can reach past the new outline. Clip it to
+      // this rock so it never cuts into a neighbour.
+      const hull = Rocks.convexHull(rock.outer);
       for (const h of s.holes) {
         const pts = new Float32Array(h.pts.length);
         for (let i = 0; i < pts.length; i += 2) { pts[i] = h.pts[i] + ox; pts[i + 1] = h.pts[i + 1] + oy; }
-        const poly = Rocks.makePoly(pts);
-        poly.hx = h.cx + ox; poly.hy = h.cy + oy;
-        rock.holes.push(poly);
+        const hx = h.cx + ox, hy = h.cy + oy;
+        // A hole is drawn as a fan from its centre. With the centre still in
+        // the rock the clipped outline stays star-shaped about it; otherwise
+        // clip each fan triangle on its own so the pieces stay exact.
+        const pieces = [];
+        if (Rocks.pointInPoly(rock, hx, hy)) {
+          pieces.push({ pts: Rocks.clipToConvex(pts, hull), hx: hx, hy: hy });
+        } else {
+          const n = pts.length / 2;
+          for (let i = 0; i < n; i++) {
+            const j = (i + 1) % n;
+            pieces.push({ pts: Rocks.clipToConvex([hx, hy, pts[2 * i], pts[2 * i + 1], pts[2 * j], pts[2 * j + 1]], hull) });
+          }
+        }
+        for (const p of pieces) {
+          if (p.pts.length < 6) continue;
+          const poly = Rocks.makePoly(p.pts);
+          if (!(poly.area > 1)) continue;
+          poly.hx = p.hx === undefined ? poly.cx : p.hx;
+          poly.hy = p.hy === undefined ? poly.cy : p.hy;
+          rock.holes.push(poly);
+        }
       }
+      // Cracks keep only their runs inside the rock; the stencil would
+      // otherwise draw a stray end on a neighbouring rock.
       for (const sp of s.spots) {
         for (const c of sp.cracks) {
-          const pts = new Float32Array(c.length);
-          for (let i = 0; i < pts.length; i += 2) { pts[i] = c[i] + ox; pts[i + 1] = c[i + 1] + oy; }
-          rock.cracks.push(pts);
+          let run = [];
+          for (let i = 0; i <= c.length; i += 2) {
+            const x = c[i] + ox, y = c[i + 1] + oy;
+            if (i < c.length && Rocks.pointInPoly(rock, x, y)) { run.push(x, y); continue; }
+            if (run.length >= 4) rock.cracks.push(new Float32Array(run));
+            run = [];
+          }
         }
       }
     }
