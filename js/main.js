@@ -4,6 +4,7 @@
   const pages = document.querySelectorAll('[data-page]');
   const tabs = document.querySelectorAll('[data-tab]');
   let onLayoutChange = function () {};
+  let onPageChange = function () {};
 
   function showPage() {
     const id = (location.hash || '#home').slice(1);
@@ -15,6 +16,7 @@
       if (on) t.setAttribute('aria-current', 'page'); else t.removeAttribute('aria-current');
     });
     window.scrollTo(0, 0);
+    onPageChange();
     onLayoutChange();
   }
 
@@ -35,21 +37,35 @@
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   let raining = !reducedMotion;
   let rainCarry = 0;
+  let rocks = [];
+
+  const chunkLayer = document.getElementById('chunks');
+  const fracture = new window.Fracture({
+    layer: chunkLayer,
+    renderer: renderer,
+    onDamage: function () { buildRocks(); },
+  });
+  window.portfolioFracture = fracture;
 
   function docWidth() { return document.documentElement.clientWidth; }
+  function docHeight() { return document.documentElement.scrollHeight; }
 
   function buildRocks() {
     const sx = window.scrollX, sy = window.scrollY;
-    const rocks = [];
-    document.querySelectorAll('.rock').forEach(function (el, i) {
+    rocks = [];
+    document.querySelectorAll('.rock:not(.chunk)').forEach(function (el, i) {
       if (!el.getClientRects().length) return; // hidden page
       const r = el.getBoundingClientRect();
       const seed = window.Rocks.hashString(el.textContent.slice(0, 60)) + i;
-      rocks.push(window.Rocks.makeRock(r.left + sx, r.top + sy, r.width, r.height, seed));
+      const rock = window.Rocks.makeRock(r.left + sx, r.top + sy, r.width, r.height, seed);
+      fracture.decorate(rock, el, r.left + sx, r.top + sy);
+      rocks.push(rock);
     });
     sim.setRocks(rocks);
     sim.removeInsideRocks();
     renderer.setRocks(rocks);
+    chunkLayer.style.height = '0';
+    chunkLayer.style.height = docHeight() + 'px';
   }
 
   let rebuildTimer = 0;
@@ -57,11 +73,12 @@
     clearTimeout(rebuildTimer);
     rebuildTimer = setTimeout(buildRocks, 60);
   };
+  onPageChange = function () { fracture.clearChunks(); };
   buildRocks();
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(onLayoutChange);
   window.addEventListener('load', onLayoutChange);
   window.addEventListener('resize', onLayoutChange);
-  if (window.ResizeObserver) new ResizeObserver(onLayoutChange).observe(document.body);
+  if (window.ResizeObserver) new ResizeObserver(onLayoutChange).observe(document.querySelector('.wrap'));
 
   // ---- Input --------------------------------------------------------------
   let lastPointer = null;
@@ -78,14 +95,17 @@
   window.addEventListener('blur', pointerGone);
   window.addEventListener('pointerup', function (e) { if (e.pointerType !== 'mouse') pointerGone(); });
 
-  window.addEventListener('pointerdown', function (e) {
+  // Click a rock to crack it; click open space to splash.
+  window.addEventListener('click', function (e) {
     if (e.button !== 0) return;
-    if (e.target.closest('a, button, iframe, input, .rock, .hud')) return;
-    sim.splash(e.clientX + window.scrollX, e.clientY + window.scrollY, 45);
+    if (e.target.closest('a, button, input, iframe, object, .hud')) return;
+    const sel = window.getSelection();
+    if (sel && !sel.isCollapsed) return; // the user was selecting text
+    const x = e.clientX + window.scrollX, y = e.clientY + window.scrollY;
+    if (!fracture.hit(rocks, x, y)) sim.splash(x, y, 45);
   });
 
   // ---- HUD ----------------------------------------------------------------
-  const stats = document.getElementById('hud-stats');
   const rainBtn = document.getElementById('rain-toggle');
   function syncRainButton() {
     rainBtn.textContent = raining ? 'Pause rain' : 'Start rain';
@@ -93,11 +113,17 @@
   }
   rainBtn.addEventListener('click', function () { raining = !raining; syncRainButton(); });
   syncRainButton();
+  document.getElementById('repair').addEventListener('click', function () { fracture.repair(); });
 
-  // ---- Loop ---------------------------------------------------------------
-  let frames = 0, lastStat = performance.now(), slowStreak = 0;
+  // ---- Loop (capped at 60 fps so high-refresh screens run at normal speed) --
+  const FRAME_MS = 1000 / 60;
+  let lastFrame = 0, frames = 0, lastCheck = 0, slowStreak = 0;
 
   function frame(now) {
+    requestAnimationFrame(frame);
+    if (now - lastFrame < FRAME_MS - 1) return;
+    lastFrame = Math.max(lastFrame + FRAME_MS, now - FRAME_MS);
+
     const W = window.innerWidth, H = window.innerHeight;
     renderer.resize(W, H, Math.min(window.devicePixelRatio || 1, 2));
     const sx = window.scrollX, sy = window.scrollY;
@@ -110,20 +136,21 @@
         sim.add(Math.random() * dw, sy - 10 - Math.random() * 40, 0.4 + Math.random() * 0.3, 5 + Math.random() * 2);
       }
     }
+
+    const moving = fracture.step(rocks, docHeight());
+    sim.setRocks(moving.length ? rocks.concat(moving) : rocks);
     sim.step({ left: -40, right: dw + 40, top: sy - 400, bottom: sy + H + 60 });
     sim.pointer.dx *= 0.5; sim.pointer.dy *= 0.5;
-    renderer.render(sim, sx, sy);
+    renderer.render(sim, sx, sy, fracture.chunks);
 
+    // Shed particles on slow devices.
     frames++;
-    if (now - lastStat > 1000) {
-      const fps = (frames * 1000) / (now - lastStat);
-      // Shed particles on slow devices.
+    if (now - lastCheck > 1000) {
+      const fps = (frames * 1000) / (now - lastCheck);
       slowStreak = fps < 45 ? slowStreak + 1 : 0;
       if (slowStreak >= 2 && sim.limit > 500) { sim.setLimit(sim.limit * 0.8); slowStreak = 0; }
-      stats.textContent = sim.count + ' particles · ' + Math.round(fps) + ' fps';
-      frames = 0; lastStat = now;
+      frames = 0; lastCheck = now;
     }
-    requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
 })();

@@ -12,6 +12,10 @@ precision mediump float;
 #endif
 `;
 
+  // Rocks and falling chunks share this shader. Chunks pass a rigid
+  // transform (rotation about c0, then translate to pos); static rocks pass
+  // the identity. v_world stays in the original coordinates so the stone
+  // texture travels with a chunk.
   const ROCK_VS = `
 attribute vec2 a_pos;
 attribute vec2 a_normal;
@@ -19,16 +23,38 @@ attribute float a_edge;
 uniform vec2 u_scroll;
 uniform vec2 u_res;
 uniform vec2 u_offset;
+uniform vec2 u_rot;
+uniform vec2 u_c0;
+uniform vec2 u_pos;
 varying vec2 v_world;
 varying vec2 v_normal;
 varying float v_edge;
+vec2 rot(vec2 v) { return vec2(u_rot.x * v.x - u_rot.y * v.y, u_rot.y * v.x + u_rot.x * v.y); }
 void main() {
-  vec2 p = a_pos + u_offset - u_scroll;
+  vec2 p = rot(a_pos - u_c0) + u_pos + u_offset - u_scroll;
   v_world = a_pos;
-  v_normal = a_normal;
+  v_normal = rot(a_normal);
   v_edge = a_edge;
   gl_Position = vec4(p.x / u_res.x * 2.0 - 1.0, 1.0 - p.y / u_res.y * 2.0, 0.0, 1.0);
 }`;
+
+  // Flat colour geometry: cracks, fracture rims, and hole masks.
+  const FLAT_VS = `
+attribute vec2 a_pos;
+attribute vec4 a_col;
+uniform vec2 u_scroll;
+uniform vec2 u_res;
+varying vec4 v_col;
+void main() {
+  vec2 p = a_pos - u_scroll;
+  v_col = a_col;
+  gl_Position = vec4(p.x / u_res.x * 2.0 - 1.0, 1.0 - p.y / u_res.y * 2.0, 0.0, 1.0);
+}`;
+
+  const FLAT_FS = `
+precision mediump float;
+varying vec4 v_col;
+void main() { gl_FragColor = v_col; }`;
 
   const ROCK_FS = PRECISION + `
 varying vec2 v_world;
@@ -158,10 +184,51 @@ void main() {
     return info;
   }
 
+  const CRACK_DARK = [0.03, 0.03, 0.04, 0.85];
+  const CRACK_LIGHT = [0.5, 0.5, 0.52, 0.22];
+  const RIM_IN = [0.5, 0.49, 0.47, 0.9];
+  const RIM_OUT = [0.0, 0.0, 0.0, 0.0];
+
+  // Push a quad for segment (ax, ay) -> (bx, by) with widths wa, wb.
+  function segment(out, ax, ay, bx, by, wa, wb, col) {
+    const dx = bx - ax, dy = by - ay;
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = -dy / len, ny = dx / len;
+    const v = [
+      ax + nx * wa, ay + ny * wa, ax - nx * wa, ay - ny * wa,
+      bx + nx * wb, by + ny * wb, bx - nx * wb, by - ny * wb,
+    ];
+    const order = [0, 1, 2, 1, 3, 2];
+    for (const k of order) out.push(v[2 * k], v[2 * k + 1], col[0] * col[3], col[1] * col[3], col[2] * col[3], col[3]);
+  }
+
+  // Rock-shader geometry for a polygon that is star-shaped about (px, py):
+  // a bevelled rim strip, then a fan over the inset ring.
+  function starGeometry(pts, px, py, inset) {
+    const n = pts.length / 2;
+    const verts = [];
+    const ring = [];
+    for (let i = 0; i < n; i++) {
+      const x = pts[2 * i], y = pts[2 * i + 1];
+      const dx = x - px, dy = y - py;
+      const d = Math.hypot(dx, dy) || 1;
+      const t = Math.min(0.8, inset / d);
+      ring.push([x, y, dx / d, dy / d, x - dx * t, y - dy * t]);
+    }
+    const push = (x, y, nx, ny, e) => verts.push(x, y, nx, ny, e);
+    for (let i = 0; i < n; i++) {
+      const a = ring[i], b = ring[(i + 1) % n];
+      push(a[0], a[1], a[2], a[3], 0); push(b[0], b[1], b[2], b[3], 0); push(a[4], a[5], 0, 0, 1);
+      push(a[4], a[5], 0, 0, 1); push(b[0], b[1], b[2], b[3], 0); push(b[4], b[5], 0, 0, 1);
+      push(px, py, 0, 0, 1); push(a[4], a[5], 0, 0, 1); push(b[4], b[5], 0, 0, 1);
+    }
+    return new Float32Array(verts);
+  }
+
   class Renderer {
     static create(canvas, opts) {
       try {
-        const gl = canvas.getContext('webgl', { alpha: true, premultipliedAlpha: true, antialias: true });
+        const gl = canvas.getContext('webgl', { alpha: true, premultipliedAlpha: true, antialias: true, stencil: true });
         if (!gl) return null;
         return new Renderer(canvas, gl, opts);
       } catch (e) {
@@ -175,10 +242,15 @@ void main() {
       this.gl = gl;
       this.particleSize = (opts && opts.particleSize) || 22;
       this.rock = program(gl, ROCK_VS, ROCK_FS);
+      this.flat = program(gl, FLAT_VS, FLAT_FS);
       this.point = program(gl, POINT_VS, POINT_FS);
       this.composite = program(gl, QUAD_VS, COMPOSITE_FS);
       this.rockBuf = gl.createBuffer();
       this.rockVerts = 0;
+      this.holeBuf = gl.createBuffer();
+      this.holeVerts = 0;
+      this.detailBuf = gl.createBuffer();
+      this.detailVerts = 0;
       this.partBuf = gl.createBuffer();
       this.partData = new Float32Array(3 * ((opts && opts.maxParticles) || 4096));
       this.quadBuf = gl.createBuffer();
@@ -210,11 +282,15 @@ void main() {
       this.fbo = { fb, tex, w: fw, h: fh };
     }
 
+    // rocks: static rocks; each may have holes (polygons with a centre hx, hy)
+    // and cracks (flat arrays of polyline points in document px).
     setRocks(rocks) {
       // Per vertex: x, y, nx, ny, edge. Rim strip between outer and inner
       // rings, then a fan over the (convex) inner ring.
       const verts = [];
       const push = (x, y, nx, ny, e) => verts.push(x, y, nx, ny, e);
+      const holes = [];   // x, y, r, g, b, a (colour unused)
+      const detail = [];  // x, y, r, g, b, a
       for (const r of rocks) {
         const n = r.n, o = r.outer, inn = r.inner, nm = r.normals;
         for (let i = 0; i < n; i++) {
@@ -229,43 +305,164 @@ void main() {
           push(inn[2 * i], inn[2 * i + 1], 0, 0, 1);
           push(inn[2 * j], inn[2 * j + 1], 0, 0, 1);
         }
+        for (const h of r.holes) {
+          const hp = h.outer, hn = h.n;
+          for (let i = 0; i < hn; i++) {
+            const j = (i + 1) % hn;
+            holes.push(h.hx, h.hy, 0, 0, 0, 1, hp[2 * i], hp[2 * i + 1], 0, 0, 0, 1, hp[2 * j], hp[2 * j + 1], 0, 0, 0, 1);
+            // Fresh fracture face just outside the hole edge.
+            const ax = hp[2 * i], ay = hp[2 * i + 1], bx = hp[2 * j], by = hp[2 * j + 1];
+            const da = Math.hypot(ax - h.hx, ay - h.hy) || 1, db = Math.hypot(bx - h.hx, by - h.hy) || 1;
+            const w = 7;
+            const aox = ax + ((ax - h.hx) / da) * w, aoy = ay + ((ay - h.hy) / da) * w;
+            const box = bx + ((bx - h.hx) / db) * w, boy = by + ((by - h.hy) / db) * w;
+            const ci = RIM_IN.slice(0, 3).map((c) => c * RIM_IN[3]).concat(RIM_IN[3]);
+            const co = RIM_OUT;
+            detail.push(ax, ay, ...ci, bx, by, ...ci, aox, aoy, ...co);
+            detail.push(aox, aoy, ...co, bx, by, ...ci, box, boy, ...co);
+          }
+        }
+        for (const c of r.cracks || []) {
+          const m = c.length / 2;
+          for (let i = 0; i + 1 < m; i++) {
+            const t0 = 1 - i / m, t1 = 1 - (i + 1) / m;
+            segment(detail, c[2 * i] + 0.7, c[2 * i + 1] + 1, c[2 * i + 2] + 0.7, c[2 * i + 3] + 1, 0.4 + t0 * 0.8, 0.4 + t1 * 0.8, CRACK_LIGHT);
+          }
+          for (let i = 0; i + 1 < m; i++) {
+            const t0 = 1 - i / m, t1 = 1 - (i + 1) / m;
+            segment(detail, c[2 * i], c[2 * i + 1], c[2 * i + 2], c[2 * i + 3], 0.35 + t0 * 1.1, 0.35 + t1 * 1.1, CRACK_DARK);
+          }
+        }
       }
       const gl = this.gl;
       gl.bindBuffer(gl.ARRAY_BUFFER, this.rockBuf);
       gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verts), gl.STATIC_DRAW);
       this.rockVerts = verts.length / 5;
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.holeBuf);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(holes), gl.STATIC_DRAW);
+      this.holeVerts = holes.length / 6;
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.detailBuf);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(detail), gl.STATIC_DRAW);
+      this.detailVerts = detail.length / 6;
     }
 
-    render(sim, scrollX, scrollY) {
+    useRock(scrollX, scrollY) {
+      const gl = this.gl, R = this.rock;
+      gl.useProgram(R.p);
+      gl.uniform2f(R.u.u_scroll, scrollX, scrollY);
+      gl.uniform2f(R.u.u_res, this.width, this.height);
+      return R;
+    }
+
+    bindRockBuffer(buf) {
+      const gl = this.gl, R = this.rock;
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      gl.enableVertexAttribArray(R.a.a_pos);
+      gl.vertexAttribPointer(R.a.a_pos, 2, gl.FLOAT, false, 20, 0);
+      gl.enableVertexAttribArray(R.a.a_normal);
+      gl.vertexAttribPointer(R.a.a_normal, 2, gl.FLOAT, false, 20, 8);
+      gl.enableVertexAttribArray(R.a.a_edge);
+      gl.vertexAttribPointer(R.a.a_edge, 1, gl.FLOAT, false, 20, 16);
+    }
+
+    drawFlat(buf, count, scrollX, scrollY) {
+      const gl = this.gl, F = this.flat;
+      gl.useProgram(F.p);
+      gl.uniform2f(F.u.u_scroll, scrollX, scrollY);
+      gl.uniform2f(F.u.u_res, this.width, this.height);
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      gl.enableVertexAttribArray(F.a.a_pos);
+      gl.vertexAttribPointer(F.a.a_pos, 2, gl.FLOAT, false, 24, 0);
+      gl.enableVertexAttribArray(F.a.a_col);
+      gl.vertexAttribPointer(F.a.a_col, 4, gl.FLOAT, false, 24, 8);
+      gl.drawArrays(gl.TRIANGLES, 0, count);
+      gl.disableVertexAttribArray(F.a.a_col);
+    }
+
+    // chunks: falling pieces { pts (flat, original doc px), px, py (star
+    // centre), c0x, c0y, x, y, angle }.
+    drawChunks(chunks, scrollX, scrollY) {
+      const gl = this.gl;
+      const R = this.useRock(scrollX, scrollY);
+      for (const c of chunks) {
+        if (!c.glBuf) {
+          const geo = starGeometry(c.pts, c.px, c.py, 10);
+          c.glBuf = gl.createBuffer();
+          gl.bindBuffer(gl.ARRAY_BUFFER, c.glBuf);
+          gl.bufferData(gl.ARRAY_BUFFER, geo, gl.STATIC_DRAW);
+          c.glVerts = geo.length / 5;
+        }
+        this.bindRockBuffer(c.glBuf);
+        gl.uniform2f(R.u.u_rot, Math.cos(c.angle), Math.sin(c.angle));
+        gl.uniform2f(R.u.u_c0, c.c0x, c.c0y);
+        gl.uniform2f(R.u.u_pos, c.x, c.y);
+        gl.uniform2f(R.u.u_offset, 6, 12);
+        gl.uniform1f(R.u.u_shadow, 1);
+        gl.drawArrays(gl.TRIANGLES, 0, c.glVerts);
+        gl.uniform2f(R.u.u_offset, 0, 0);
+        gl.uniform1f(R.u.u_shadow, 0);
+        gl.drawArrays(gl.TRIANGLES, 0, c.glVerts);
+      }
+    }
+
+    releaseChunk(c) {
+      if (c.glBuf) { this.gl.deleteBuffer(c.glBuf); c.glBuf = null; }
+    }
+
+    render(sim, scrollX, scrollY, chunks) {
       const gl = this.gl;
       const W = this.width, H = this.height;
 
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       gl.viewport(0, 0, this.canvas.width, this.canvas.height);
       gl.clearColor(0, 0, 0, 0);
-      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.clearStencil(0);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
-      // Rocks: drop shadow, then the stone.
       if (this.rockVerts) {
-        const R = this.rock;
-        gl.useProgram(R.p);
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.rockBuf);
-        gl.enableVertexAttribArray(R.a.a_pos);
-        gl.vertexAttribPointer(R.a.a_pos, 2, gl.FLOAT, false, 20, 0);
-        gl.enableVertexAttribArray(R.a.a_normal);
-        gl.vertexAttribPointer(R.a.a_normal, 2, gl.FLOAT, false, 20, 8);
-        gl.enableVertexAttribArray(R.a.a_edge);
-        gl.vertexAttribPointer(R.a.a_edge, 1, gl.FLOAT, false, 20, 16);
-        gl.uniform2f(R.u.u_scroll, scrollX, scrollY);
-        gl.uniform2f(R.u.u_res, W, H);
+        // Stencil: 1 = hole, 2 = solid rock.
+        gl.enable(gl.STENCIL_TEST);
+        if (this.holeVerts) {
+          gl.colorMask(false, false, false, false);
+          gl.stencilFunc(gl.ALWAYS, 1, 0xff);
+          gl.stencilOp(gl.KEEP, gl.KEEP, gl.REPLACE);
+          this.drawFlat(this.holeBuf, this.holeVerts, scrollX, scrollY);
+          gl.colorMask(true, true, true, true);
+        }
+
+        const R = this.useRock(scrollX, scrollY);
+        this.bindRockBuffer(this.rockBuf);
+        gl.uniform2f(R.u.u_rot, 1, 0);
+        gl.uniform2f(R.u.u_c0, 0, 0);
+        gl.uniform2f(R.u.u_pos, 0, 0);
+        // Drop shadow ignores holes, so it shows through them like depth.
+        gl.stencilFunc(gl.ALWAYS, 0, 0xff);
+        gl.stencilOp(gl.KEEP, gl.KEEP, gl.KEEP);
         gl.uniform2f(R.u.u_offset, 6, 12);
         gl.uniform1f(R.u.u_shadow, 1);
         gl.drawArrays(gl.TRIANGLES, 0, this.rockVerts);
+        // Stone only outside holes (bit 0 clear); marks those pixels with 2.
+        gl.stencilFunc(gl.EQUAL, 2, 0x01);
+        gl.stencilOp(gl.KEEP, gl.KEEP, gl.REPLACE);
         gl.uniform2f(R.u.u_offset, 0, 0);
         gl.uniform1f(R.u.u_shadow, 0);
         gl.drawArrays(gl.TRIANGLES, 0, this.rockVerts);
+        gl.disableVertexAttribArray(R.a.a_normal);
+        gl.disableVertexAttribArray(R.a.a_edge);
+
+        if (this.detailVerts) {
+          gl.stencilFunc(gl.EQUAL, 2, 0xff);
+          gl.stencilOp(gl.KEEP, gl.KEEP, gl.KEEP);
+          this.drawFlat(this.detailBuf, this.detailVerts, scrollX, scrollY);
+        }
+        gl.disable(gl.STENCIL_TEST);
+      }
+
+      if (chunks && chunks.length) {
+        this.drawChunks(chunks, scrollX, scrollY);
+        const R = this.rock;
         gl.disableVertexAttribArray(R.a.a_normal);
         gl.disableVertexAttribArray(R.a.a_edge);
       }

@@ -31,7 +31,7 @@
           <p class="eyebrow">AI Engineer · Real-Time Interactive Simulation</p>
           <h1>Zafir Maricar</h1>
           <p class="lede">I build real-time systems. Today that means video AI pipelines at NCS. Before that it was physics engines, networked games and transport simulations.</p>
-          <p class="hint">The rain on this page is a live particle fluid simulation running in your browser, and every panel is a collider. Move your cursor through the water, or click (or tap) empty space to splash.</p>
+          <p class="hint">The rain on this page is a live particle fluid simulation running in your browser, and every panel is a collider. Move your cursor through the water and click empty space to splash. Click a rock to crack it, and keep hitting the same spot to break a piece off.</p>
           <div class="cta">
             <a class="button" href="#projects">See projects</a>
             <a class="button ghost" href="#resume">View resume</a>
@@ -202,14 +202,17 @@
     </footer>
   </div>
 
+  <div id="chunks" aria-hidden="true"></div>
+
   <div class="hud" role="group" aria-label="Simulation controls">
-    <span id="hud-stats">Fluid simulation</span>
     <button id="rain-toggle" type="button">Pause rain</button>
+    <button id="repair" type="button">Repair rocks</button>
   </div>
 
   <script src="js/rocks.js"></script>
   <script src="js/fluid.js"></script>
   <script src="js/renderer.js"></script>
+  <script src="js/fracture.js"></script>
   <script src="js/main.js"></script>
 </body>
 </html>

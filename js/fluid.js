@@ -4,6 +4,8 @@
 (function (root) {
   'use strict';
 
+  const Rocks = root.Rocks || require('./rocks.js');
+
   const DEFAULTS = {
     maxParticles: 2400,
     h: 15,              // interaction radius (px)
@@ -91,8 +93,7 @@
     removeInsideRocks() {
       for (let i = this.count - 1; i >= 0; i--) {
         for (const r of this.rocks) {
-          if (this.x[i] < r.minX || this.x[i] > r.maxX || this.y[i] < r.minY || this.y[i] > r.maxY) continue;
-          if (pointInPoly(r, this.x[i], this.y[i])) { this.remove(i); break; }
+          if (Rocks.solidAt(r, this.x[i], this.y[i])) { this.remove(i); break; }
         }
       }
     }
@@ -257,30 +258,19 @@
         const xi = x[i], yi = y[i];
         for (let r = 0; r < rocks.length; r++) {
           const rock = rocks[r];
-          if (xi < rock.minX || xi > rock.maxX || yi < rock.minY || yi > rock.maxY) continue;
-          if (!pointInPoly(rock, xi, yi)) continue;
-          // Push out to the nearest edge.
-          const pts = rock.outer, n = rock.n;
-          let best = Infinity, bx = xi, by = yi, bnx = 0, bny = -1;
-          for (let e = 0; e < n; e++) {
-            const ax = pts[2 * e], ay = pts[2 * e + 1];
-            const f = (e + 1) % n;
-            const ex = pts[2 * f] - ax, ey = pts[2 * f + 1] - ay;
-            const len2 = ex * ex + ey * ey;
-            let t = ((xi - ax) * ex + (yi - ay) * ey) / len2;
-            t = t < 0 ? 0 : t > 1 ? 1 : t;
-            const qx = ax + ex * t, qy = ay + ey * t;
-            const d2 = (xi - qx) * (xi - qx) + (yi - qy) * (yi - qy);
-            if (d2 < best) { best = d2; bx = qx; by = qy; bnx = rock.nx[e]; bny = rock.ny[e]; }
-          }
-          const nxp = bx + bnx * 0.5, nyp = by + bny * 0.5;
-          // Keep tangential motion (with friction), drop motion into the rock.
-          const vxi = xi - px[i], vyi = yi - py[i];
+          if (!Rocks.solidAt(rock, xi, yi)) continue;
+          const c = Rocks.contact(rock, xi, yi);
+          const bnx = c.nx, bny = c.ny;
+          const nxp = c.x + bnx * 0.5, nyp = c.y + bny * 0.5;
+          // Relative to the collider (moving chunks carry water along): keep
+          // tangential motion with friction, drop motion into the surface.
+          const cvx = rock.vx || 0, cvy = rock.vy || 0;
+          const vxi = xi - px[i] - cvx, vyi = yi - py[i] - cvy;
           const vn = vxi * bnx + vyi * bny;
           let tx = (vxi - vn * bnx) * fr, ty = (vyi - vn * bny) * fr;
           if (vn > 0) { tx += vn * bnx; ty += vn * bny; }
           x[i] = nxp; y[i] = nyp;
-          px[i] = nxp - tx; py[i] = nyp - ty;
+          px[i] = nxp - tx - cvx; py[i] = nyp - ty - cvy;
           break;
         }
       }
@@ -311,19 +301,6 @@
     }
   }
 
-  function pointInPoly(rock, x, y) {
-    const pts = rock.outer, n = rock.n;
-    let inside = false;
-    for (let i = 0, j = n - 1; i < n; j = i++) {
-      const yi = pts[2 * i + 1], yj = pts[2 * j + 1];
-      if ((yi > y) !== (yj > y)) {
-        const xi = pts[2 * i], xj = pts[2 * j];
-        if (x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
-      }
-    }
-    return inside;
-  }
-
   root.FluidSim = FluidSim;
-  if (typeof module !== 'undefined') module.exports = { FluidSim, pointInPoly };
+  if (typeof module !== 'undefined') module.exports = { FluidSim };
 })(typeof window !== 'undefined' ? window : globalThis);
