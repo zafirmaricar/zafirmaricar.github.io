@@ -1,5 +1,5 @@
-// Rock fracturing. Clicking a rock cracks it at that spot; repeated hits on
-// the same spot grow the cracks until a chunk breaks off. The chunk keeps the
+// Rock fracturing. Clicking a rock cracks it open at that spot; a second hit on
+// the same spot breaks the chunk off. The chunk keeps the
 // text it covered (a clipped clone of the panel), falls as a rigid body,
 // collides with the other rocks and pushes water aside until it leaves the
 // page. Damage is stored per panel in panel-local pixels so it survives
@@ -9,7 +9,7 @@
 
   const Rocks = root.Rocks;
   const MERGE_RADIUS = 45;   // hits closer than this build on the same fracture
-  const HITS_TO_BREAK = 4;
+  const HITS_TO_BREAK = 2;
   const GRAVITY = 0.32;      // px / frame^2
   const RESTITUTION = 0.2;
   const MU = 0.5;
@@ -70,12 +70,16 @@
         const d = Math.hypot(sp.x - lx, sp.y - ly);
         if (d < best) { best = d; spot = sp; }
       }
-      if (!spot) { spot = { x: lx, y: ly, hits: 0, cracks: [] }; s.spots.push(spot); }
+      if (!spot) {
+        // The first hit decides the chunk's outline and cracks most of it
+        // open, so the piece that breaks off follows the visible fracture.
+        const outline = Rocks.star(lx, ly, 60 + Math.random() * 30, Math.random);
+        spot = { x: lx, y: ly, hits: 0, outline: outline, cracks: majorCracks(lx, ly, outline) };
+        s.spots.push(spot);
+      } else {
+        for (let k = 0; k < 3; k++) spot.cracks.push(crackLine(lx, ly, 30 + Math.random() * 30));
+      }
       spot.hits++;
-
-      // Grow the fracture: new cracks from the hit point, longer each time.
-      const len = 18 + spot.hits * 16;
-      for (let k = 0; k < 3; k++) spot.cracks.push(crackLine(lx, ly, len * (0.6 + Math.random() * 0.6)));
 
       if (spot.hits >= HITS_TO_BREAK) {
         s.spots.splice(s.spots.indexOf(spot), 1);
@@ -87,8 +91,11 @@
 
     breakOff(rock, s, spot) {
       const px = spot.x + rock.ox, py = spot.y + rock.oy;
-      const radius = 60 + Math.random() * 30;
-      const outline = Rocks.star(px, py, radius, Math.random);
+      const outline = new Float32Array(spot.outline.length);
+      for (let i = 0; i < outline.length; i += 2) {
+        outline[i] = spot.outline[i] + rock.ox;
+        outline[i + 1] = spot.outline[i + 1] + rock.oy;
+      }
       // The chunk is slightly smaller than the hole it leaves so it falls clear.
       const shrunk = new Float32Array(outline.length);
       for (let i = 0; i < outline.length; i += 2) {
@@ -204,6 +211,43 @@
       this.damage.clear();
       this.onDamage();
     }
+  }
+
+  // Jagged crack from (x0, y0) to (x1, y1).
+  function jagged(x0, y0, x1, y1) {
+    const len = Math.hypot(x1 - x0, y1 - y0);
+    const k = Math.max(2, Math.round(len / 8));
+    const nx = -(y1 - y0) / (len || 1), ny = (x1 - x0) / (len || 1);
+    const pts = [x0, y0];
+    for (let i = 1; i < k; i++) {
+      const t = i / k, j = (Math.random() - 0.5) * 5;
+      pts.push(x0 + (x1 - x0) * t + nx * j, y0 + (y1 - y0) * t + ny * j);
+    }
+    pts.push(x1, y1);
+    return pts;
+  }
+
+  // A heavy first fracture: radial cracks out to the chunk outline, most of
+  // the outline itself cracked open, and a few cracks running past it.
+  function majorCracks(x, y, outline) {
+    const n = outline.length / 2;
+    const cracks = [];
+    for (let i = 0; i < n; i += 2 + (Math.random() < 0.5 ? 1 : 0)) {
+      cracks.push(jagged(x, y, outline[2 * i], outline[2 * i + 1]));
+    }
+    const start = Math.floor(Math.random() * n), span = Math.round(n * (0.6 + Math.random() * 0.2));
+    for (let s = 0; s < span; s++) {
+      const a = (start + s) % n, b = (a + 1) % n;
+      cracks.push(jagged(outline[2 * a], outline[2 * a + 1], outline[2 * b], outline[2 * b + 1]));
+    }
+    for (let k = 0; k < 4; k++) {
+      const i = Math.floor(Math.random() * n);
+      const ox = outline[2 * i], oy = outline[2 * i + 1];
+      const d = Math.hypot(ox - x, oy - y) || 1;
+      const ext = 20 + Math.random() * 35;
+      cracks.push(jagged(ox, oy, ox + ((ox - x) / d) * ext, oy + ((oy - y) / d) * ext));
+    }
+    return cracks;
   }
 
   function crackLine(x, y, len) {

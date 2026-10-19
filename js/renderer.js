@@ -326,11 +326,11 @@ void main() {
           const m = c.length / 2;
           for (let i = 0; i + 1 < m; i++) {
             const t0 = 1 - i / m, t1 = 1 - (i + 1) / m;
-            segment(detail, c[2 * i] + 0.7, c[2 * i + 1] + 1, c[2 * i + 2] + 0.7, c[2 * i + 3] + 1, 0.4 + t0 * 0.8, 0.4 + t1 * 0.8, CRACK_LIGHT);
+            segment(detail, c[2 * i] + 0.7, c[2 * i + 1] + 1, c[2 * i + 2] + 0.7, c[2 * i + 3] + 1, 0.6 + t0 * 0.8, 0.6 + t1 * 0.8, CRACK_LIGHT);
           }
           for (let i = 0; i + 1 < m; i++) {
             const t0 = 1 - i / m, t1 = 1 - (i + 1) / m;
-            segment(detail, c[2 * i], c[2 * i + 1], c[2 * i + 2], c[2 * i + 3], 0.35 + t0 * 1.1, 0.35 + t1 * 1.1, CRACK_DARK);
+            segment(detail, c[2 * i], c[2 * i + 1], c[2 * i + 2], c[2 * i + 3], 0.6 + t0 * 1.1, 0.6 + t1 * 1.1, CRACK_DARK);
           }
         }
       }

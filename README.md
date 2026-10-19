@@ -7,8 +7,8 @@ is drawn as a rock and acts as a collider, so water pools on top of the panels
 and runs off their edges. Move the cursor through the water to push it, and
 click empty space to splash.
 
-Rocks can be broken. Clicking a rock cracks it at that spot, and repeated hits
-on the same spot grow the cracks until a chunk breaks off. The chunk carries the
+Rocks can be broken. Clicking a rock cracks it open at that spot, and a second hit
+on the same spot breaks that chunk off. The chunk carries the
 text it covered, falls as a rigid body, bounces off the rocks below and pushes
 the water aside until it drops off the page. "Repair rocks" restores everything.
 The simulation runs at a fixed 60 steps per second, so high-refresh screens
