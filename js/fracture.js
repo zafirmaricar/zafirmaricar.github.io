@@ -130,7 +130,14 @@
         pad.className = n.className;
         n.replaceWith(pad);
       });
-      const w = el.offsetWidth, h = el.offsetHeight;
+      const box = el.getBoundingClientRect();
+      const w = box.width, h = box.height;
+      // The clone leaves its parent, so carry over box styles that may come
+      // from the parent's context (padding, flex layout, font size). Line
+      // height stays inherited: its resolved px value would not scale with
+      // the children's own font sizes.
+      const cs = getComputedStyle(el);
+      for (const k of ['paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'fontSize', 'display', 'gap', 'flexWrap', 'alignItems', 'justifyContent']) ghost.style[k] = cs[k];
       const poly = [];
       for (let i = 0; i < pts.length; i += 2) poly.push((pts[i] - ox).toFixed(1) + 'px ' + (pts[i + 1] - oy).toFixed(1) + 'px');
       Object.assign(ghost.style, {

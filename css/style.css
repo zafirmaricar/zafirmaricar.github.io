@@ -5,6 +5,7 @@
   --accent-ink: #08111d;
   --max-width: 1040px;
   --gap: 76px;
+  --rock-gap: 72px;
   --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
@@ -58,9 +59,13 @@ ul { margin: 0 0 0.8em; padding-left: 1.2em; }
 li + li { margin-top: 0.35em; }
 
 /* Rocks: panels that the fluid collides with. Without the simulation they
-   fall back to a plain stone-coloured card. */
+   fall back to a plain stone-coloured card. A rock shrink-wraps its content
+   so empty space stays open for the water; separate groups get separate
+   rocks, spaced far enough apart that their jagged rims don't merge. */
 .rock {
   position: relative;
+  width: fit-content;
+  max-width: 100%;
   padding: 28px 32px;
   border-radius: 20px;
   background: linear-gradient(160deg, #3b4048, #262a30);
@@ -78,26 +83,26 @@ li + li { margin-top: 0.35em; }
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 56px var(--rock-gap);
   margin-top: 40px;
-  padding: 14px 22px;
 }
+.rock.brand-rock { padding: 14px 24px; }
+.rock.nav-rock { display: flex; gap: 6px; flex-wrap: wrap; padding: 10px 12px; }
 .brand {
   font-weight: 700;
   font-size: 1.1rem;
   color: var(--text);
   text-decoration: none;
 }
-.site-header nav { display: flex; gap: 6px; flex-wrap: wrap; }
-.site-header nav a {
+.nav-rock a {
   padding: 6px 14px;
   border-radius: 999px;
   color: var(--muted);
   text-decoration: none;
   font-weight: 500;
 }
-.site-header nav a:hover { color: var(--text); }
-.site-header nav a.active { background: var(--accent); color: var(--accent-ink); text-shadow: none; }
+.nav-rock a:hover { color: var(--text); }
+.nav-rock a.active { background: var(--accent); color: var(--accent-ink); text-shadow: none; }
 
 .stack {
   display: flex;
@@ -107,13 +112,15 @@ li + li { margin-top: 0.35em; }
 }
 
 .stagger { display: flex; flex-direction: column; gap: var(--gap); }
-.stagger > .rock { width: min(100%, 780px); }
+.stagger > .rock { max-width: 780px; }
+.stack > article.rock { max-width: 780px; }
 .stagger > .rock:nth-child(even) { align-self: flex-end; }
 
 .grid-2 {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: var(--gap) 80px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: var(--gap) var(--rock-gap);
 }
 
 .eyebrow {
@@ -126,8 +133,8 @@ li + li { margin-top: 0.35em; }
 }
 
 .hero { padding: 40px 44px; }
-.lede { font-size: 1.15rem; color: #dbe3ec; max-width: 60ch; }
-.hint { color: var(--muted); font-size: 0.95rem; max-width: 60ch; }
+.lede { font-size: 1.15rem; color: #dbe3ec; max-width: 40rem; }
+.hint { color: var(--muted); font-size: 0.95rem; max-width: 40rem; }
 
 .cta { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 20px; }
 .button {
@@ -157,8 +164,18 @@ li + li { margin-top: 0.35em; }
   text-shadow: none;
 }
 
-.skills { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 22px 32px; }
-.skills h3 { margin-bottom: 0.2em; }
+.skills {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--gap) var(--rock-gap);
+}
+.skills > .rock { max-width: calc((100% - 2 * var(--rock-gap)) / 3); }
+.rock.skill-group { padding: 24px; }
+.skill-group h3 { margin: 1.3em 0 0.2em; }
+.skill-group > h3:first-child { margin-top: 0; }
+.skill-group h2 + h3 { margin-top: 0.5em; }
 
 .timeline { margin: 0; }
 .timeline dt { font-weight: 600; margin-top: 1em; }
@@ -171,9 +188,10 @@ li + li { margin-top: 0.35em; }
 .links { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 10px 22px; font-weight: 500; }
 .links li { margin: 0; }
 
-.resume { padding: 24px; }
-.resume-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
-.resume-head h1 { font-size: 2rem; margin: 0; }
+.resume { width: 100%; padding: 16px; }
+.resume-head { display: flex; justify-content: space-between; align-items: center; gap: 56px var(--rock-gap); flex-wrap: wrap; }
+h1.rock.resume-title { font-size: 2rem; margin: 0; padding: 16px 28px; }
+.rock.resume-download { padding: 16px 20px; }
 .resume-frame {
   display: block;
   width: 100%;
@@ -187,6 +205,7 @@ li + li { margin-top: 0.35em; }
 .resume-fallback a { color: #0b5cad; }
 
 .site-footer { margin-bottom: 96px; padding: 14px 22px; font-size: 0.85rem; color: var(--muted); }
+.site-footer.rock { width: fit-content; padding: 14px 22px; }
 .site-footer p { margin: 0; }
 
 /* Text of broken-off chunks, positioned in document coordinates. */
@@ -231,16 +250,26 @@ li + li { margin-top: 0.35em; }
 
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
+@media (max-width: 980px) {
+  .skills > .rock { max-width: calc((100% - var(--rock-gap)) / 2); }
+}
+
 @media (max-width: 700px) {
-  :root { --gap: 60px; }
+  /* Rims protrude ~25px above and below each rock; keep a channel between them. */
+  :root { --gap: 84px; }
   .wrap { padding: 0 26px; }
   .rock { padding: 22px 20px; }
   .hero { padding: 28px 22px; }
   .site-header { margin-top: 28px; }
   .grid-2 { grid-template-columns: 1fr; }
+  .skills { flex-direction: column; }
   /* Narrower, alternating rocks leave channels for the water to fall through. */
-  .stagger > .rock, .grid-2 > .rock { width: 88%; }
-  .stagger > .rock:nth-child(even), .grid-2 > .rock:nth-child(even) { justify-self: end; align-self: flex-end; }
-  .resume { padding: 14px; }
+  .stagger > .rock, .grid-2 > .rock, .skills > .rock { max-width: 88%; }
+  .stagger > .rock:nth-child(even), .grid-2 > .rock:nth-child(even), .skills > .rock:nth-child(even) { justify-self: end; align-self: flex-end; }
+  .resume { padding: 10px; }
   .resume-frame { height: 70vh; min-height: 420px; }
 }
+
+/* Browsers without an inline PDF viewer (e.g. Android Chrome) only show the
+   fallback link, so the viewer rock shrinks to fit it. */
+.no-pdf .resume-frame { height: auto; min-height: 0; }

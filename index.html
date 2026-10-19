@@ -15,9 +15,9 @@
   <canvas id="sim" aria-hidden="true"></canvas>
 
   <div class="wrap">
-    <header class="site-header rock">
-      <a class="brand" href="#home">Zafir Maricar</a>
-      <nav aria-label="Main">
+    <header class="site-header">
+      <div class="rock brand-rock"><a class="brand" href="#home">Zafir Maricar</a></div>
+      <nav class="rock nav-rock" aria-label="Main">
         <a href="#home" data-tab="home">Home</a>
         <a href="#projects" data-tab="projects">Projects</a>
         <a href="#resume" data-tab="resume">Resume</a>
@@ -31,7 +31,7 @@
           <p class="eyebrow">AI Engineer · Real-Time Interactive Simulation</p>
           <h1>Zafir Maricar</h1>
           <p class="lede">I build real-time systems. Today that means video AI pipelines at NCS. Before that it was physics engines, networked games and transport simulations.</p>
-          <p class="hint">The rain on this page is a live particle fluid simulation running in your browser, and every panel is a collider. Move your cursor through the water and click empty space to splash. Click a rock to crack it, and keep hitting the same spot to break a piece off.</p>
+          <p class="hint">The rain on this page is a live particle fluid simulation running in your browser, and every panel is a collider. Move your cursor through the water and click empty space to splash. Click a rock to crack it, then hit the same spot again to break a piece off.</p>
           <div class="cta">
             <a class="button" href="#projects">See projects</a>
             <a class="button ghost" href="#resume">View resume</a>
@@ -93,16 +93,25 @@
           </article>
         </div>
 
-        <article class="rock">
-          <h2>Skills</h2>
-          <div class="skills">
-            <div><h3>Languages</h3><ul class="chips"><li>C++</li><li>Python</li><li>Java</li><li>Kotlin</li><li>Lua</li><li>TypeScript</li></ul></div>
-            <div><h3>AI &amp; Video</h3><ul class="chips"><li>NVIDIA CUDA</li><li>Huawei Ascend (CANN)</li><li>GStreamer</li><li>FFmpeg</li><li>RTSP</li><li>OpenAI / Anthropic / Gemini APIs</li></ul></div>
-            <div><h3>Backend &amp; Cloud</h3><ul class="chips"><li>Docker</li><li>Kubernetes</li><li>RabbitMQ</li><li>Redis</li><li>MariaDB</li><li>Node.js</li><li>Firebase</li><li>Azure</li><li>CI/CD</li></ul></div>
-            <div><h3>Graphics &amp; Simulation</h3><ul class="chips"><li>OpenGL</li><li>NVIDIA PhysX</li><li>ImGui</li><li>FMOD</li><li>AnyLogic</li></ul></div>
-            <div><h3>Web &amp; Mobile</h3><ul class="chips"><li>Next.js</li><li>React</li><li>Tailwind CSS</li><li>Android Studio</li></ul></div>
-          </div>
-        </article>
+        <div class="skills">
+          <article class="rock skill-group">
+            <h2>Skills</h2>
+            <h3>Languages</h3>
+            <ul class="chips"><li>C++</li><li>Python</li><li>Java</li><li>Kotlin</li><li>Lua</li><li>TypeScript</li></ul>
+            <h3>Graphics &amp; Simulation</h3>
+            <ul class="chips"><li>OpenGL</li><li>NVIDIA PhysX</li><li>ImGui</li><li>FMOD</li><li>AnyLogic</li></ul>
+          </article>
+          <article class="rock skill-group">
+            <h3>AI &amp; Video</h3>
+            <ul class="chips"><li>NVIDIA CUDA</li><li>Huawei Ascend (CANN)</li><li>GStreamer</li><li>FFmpeg</li><li>RTSP</li><li>OpenAI API</li><li>Anthropic API</li><li>Gemini API</li></ul>
+            <h3>Web &amp; Mobile</h3>
+            <ul class="chips"><li>Next.js</li><li>React</li><li>Tailwind CSS</li><li>Android Studio</li></ul>
+          </article>
+          <article class="rock skill-group">
+            <h3>Backend &amp; Cloud</h3>
+            <ul class="chips"><li>Docker</li><li>Kubernetes</li><li>RabbitMQ</li><li>Redis</li><li>MariaDB</li><li>Node.js</li><li>Firebase</li><li>Azure</li><li>CI/CD</li></ul>
+          </article>
+        </div>
 
         <article class="rock contact" id="contact">
           <h2>Get in touch</h2>
@@ -185,11 +194,11 @@
 
       <!-- Resume -->
       <section class="page stack" data-page="resume" hidden>
+        <div class="resume-head">
+          <h1 class="rock resume-title">Resume</h1>
+          <div class="rock resume-download"><a class="button" href="assets/docs/Zafir_Maricar_Resume.pdf" download>Download PDF</a></div>
+        </div>
         <div class="rock resume">
-          <div class="resume-head">
-            <h1>Resume</h1>
-            <a class="button" href="assets/docs/Zafir_Maricar_Resume.pdf" download>Download PDF</a>
-          </div>
           <object class="resume-frame" data="assets/docs/Zafir_Maricar_Resume.pdf#view=FitH" type="application/pdf" aria-label="Resume of Zafir Maricar">
             <p class="resume-fallback">Your browser can't show the PDF here. <a href="assets/docs/Zafir_Maricar_Resume.pdf" target="_blank" rel="noopener">Open the resume</a> instead.</p>
           </object>

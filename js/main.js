@@ -21,6 +21,7 @@
   }
 
   document.getElementById('year').textContent = new Date().getFullYear();
+  if (navigator.pdfViewerEnabled === false) document.querySelector('.resume').classList.add('no-pdf');
   window.addEventListener('hashchange', showPage);
   showPage();
 
@@ -94,6 +95,14 @@
   document.documentElement.addEventListener('pointerleave', pointerGone);
   window.addEventListener('blur', pointerGone);
   window.addEventListener('pointerup', function (e) { if (e.pointerType !== 'mouse') pointerGone(); });
+
+  // A double click on stone would select a word, which the click handler
+  // treats as text selection and ignores; keep the second hit a hit.
+  window.addEventListener('mousedown', function (e) {
+    if (e.detail < 2 || e.button !== 0 || e.target.closest('a, button, input, iframe, object, .hud')) return;
+    const x = e.clientX + window.scrollX, y = e.clientY + window.scrollY;
+    if (rocks.some(function (r) { return window.Rocks.solidAt(r, x, y); })) e.preventDefault();
+  });
 
   // Click a rock to crack it; click open space to splash.
   window.addEventListener('click', function (e) {

@@ -123,7 +123,9 @@
     line(x + r, y, x + w - r, y, 0, -1);
 
     const n = pts.length;
-    let off = pts.map(() => 8 + rng() * 20);
+    // Smaller rocks get thinner rims so the stone stays close to the content.
+    const jitter = Math.min(20, 6 + 0.08 * Math.min(w, h));
+    let off = pts.map(() => 6 + rng() * jitter);
     for (let pass = 0; pass < 2; pass++) {
       off = off.map((o, i) => (off[(i + n - 1) % n] + 2 * o + off[(i + 1) % n]) / 4);
     }
