@@ -1,0 +1,234 @@
+:root {
+  --text: #eef2f6;
+  --muted: #a9b4c2;
+  --accent: #7cc4ff;
+  --accent-ink: #08111d;
+  --max-width: 1040px;
+  --gap: 76px;
+  --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+html { background: #0b1320; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: var(--font);
+  color: var(--text);
+  line-height: 1.6;
+  background:
+    radial-gradient(1100px 600px at 75% -10%, #1f3a5f 0%, transparent 60%),
+    radial-gradient(900px 500px at 0% 40%, #14263d 0%, transparent 60%),
+    linear-gradient(180deg, #0b1320 0%, #0f1b2c 60%, #0b1422 100%);
+  background-attachment: fixed;
+}
+
+#sim {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 0;
+  pointer-events: none;
+  display: none;
+}
+.sim-on #sim { display: block; }
+
+.wrap {
+  position: relative;
+  z-index: 1;
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 0 40px;
+}
+
+a { color: var(--accent); }
+a:hover { color: #b3dcff; }
+
+h1, h2, h3 { line-height: 1.15; margin: 0 0 0.4em; letter-spacing: -0.01em; }
+h1 { font-size: clamp(2.4rem, 6vw, 4rem); letter-spacing: -0.03em; }
+h2 { font-size: 1.35rem; }
+h3 { font-size: 0.8rem; font-family: var(--mono); font-weight: 500; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+p { margin: 0 0 0.8em; }
+ul { margin: 0 0 0.8em; padding-left: 1.2em; }
+li + li { margin-top: 0.35em; }
+
+/* Rocks: panels that the fluid collides with. Without the simulation they
+   fall back to a plain stone-coloured card. */
+.rock {
+  position: relative;
+  padding: 28px 32px;
+  border-radius: 20px;
+  background: linear-gradient(160deg, #3b4048, #262a30);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+.rock > :last-child { margin-bottom: 0; }
+.sim-on .rock {
+  background: transparent;
+  box-shadow: none;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+}
+
+.site-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 40px;
+  padding: 14px 22px;
+}
+.brand {
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--text);
+  text-decoration: none;
+}
+.site-header nav { display: flex; gap: 6px; flex-wrap: wrap; }
+.site-header nav a {
+  padding: 6px 14px;
+  border-radius: 999px;
+  color: var(--muted);
+  text-decoration: none;
+  font-weight: 500;
+}
+.site-header nav a:hover { color: var(--text); }
+.site-header nav a.active { background: var(--accent); color: var(--accent-ink); text-shadow: none; }
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  padding: var(--gap) 0;
+}
+
+.stagger { display: flex; flex-direction: column; gap: var(--gap); }
+.stagger > .rock { width: min(100%, 780px); }
+.stagger > .rock:nth-child(even) { align-self: flex-end; }
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: var(--gap) 80px;
+}
+
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  margin-bottom: 0.5em;
+}
+
+.hero { padding: 40px 44px; }
+.lede { font-size: 1.15rem; color: #dbe3ec; max-width: 60ch; }
+.hint { color: var(--muted); font-size: 0.95rem; max-width: 60ch; }
+
+.cta { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 20px; }
+.button {
+  display: inline-block;
+  padding: 10px 18px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+  text-decoration: none;
+  text-shadow: none;
+}
+.button:hover { background: #a6d6ff; color: var(--accent-ink); }
+.button.ghost { background: transparent; color: var(--text); border: 1px solid rgba(255, 255, 255, 0.35); }
+.button.ghost:hover { border-color: var(--text); }
+
+.role { color: var(--muted); font-size: 0.95rem; }
+
+.chips { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; margin: 0.6em 0 0; }
+.chips li {
+  margin: 0;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  background: rgba(0, 0, 0, 0.32);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  text-shadow: none;
+}
+
+.skills { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 22px 32px; }
+.skills h3 { margin-bottom: 0.2em; }
+
+.timeline { margin: 0; }
+.timeline dt { font-weight: 600; margin-top: 1em; }
+.timeline dt:first-child { margin-top: 0; }
+.timeline dt span { display: block; font-family: var(--mono); font-size: 0.75rem; font-weight: 400; color: var(--muted); }
+.timeline dd { margin: 0.2em 0 0; color: #d3dbe5; }
+
+.award { color: #ffd98a; }
+
+.links { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 10px 22px; font-weight: 500; }
+.links li { margin: 0; }
+
+.resume { padding: 24px; }
+.resume-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.resume-head h1 { font-size: 2rem; margin: 0; }
+.resume-frame {
+  display: block;
+  width: 100%;
+  height: 82vh;
+  min-height: 520px;
+  border: 0;
+  border-radius: 10px;
+  background: #fff;
+}
+.resume-fallback { padding: 24px; color: #222; text-shadow: none; }
+.resume-fallback a { color: #0b5cad; }
+
+.site-footer { margin-bottom: 96px; padding: 14px 22px; font-size: 0.85rem; color: var(--muted); }
+.site-footer p { margin: 0; }
+
+.hud {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 3;
+  display: none;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 6px 6px 14px;
+  border-radius: 999px;
+  background: rgba(8, 14, 24, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font: 12px var(--mono);
+  color: var(--muted);
+  backdrop-filter: blur(6px);
+}
+.sim-on .hud { display: flex; }
+.hud button {
+  font: inherit;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  padding: 4px 12px;
+  cursor: pointer;
+}
+.hud button:hover { background: rgba(255, 255, 255, 0.16); }
+
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+@media (max-width: 700px) {
+  :root { --gap: 60px; }
+  .wrap { padding: 0 26px; }
+  .rock { padding: 22px 20px; }
+  .hero { padding: 28px 22px; }
+  .site-header { margin-top: 28px; }
+  .grid-2 { grid-template-columns: 1fr; }
+  /* Narrower, alternating rocks leave channels for the water to fall through. */
+  .stagger > .rock, .grid-2 > .rock { width: 88%; }
+  .stagger > .rock:nth-child(even), .grid-2 > .rock:nth-child(even) { justify-self: end; align-self: flex-end; }
+  .resume { padding: 14px; }
+  .resume-frame { height: 70vh; min-height: 420px; }
+}
