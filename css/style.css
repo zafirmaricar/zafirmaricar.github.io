@@ -219,30 +219,10 @@ h1.rock.resume-title { font-size: 2rem; margin: 0; padding: 16px 28px; }
   border-radius: 10px;
   background: #fff;
 }
-
-/* Phones: the doc rebuilt as panels (assets/resume-doc.html, made by
-   scripts/resume_sync.py), one rock per section. */
-.resume-doc { display: none; flex-direction: column; gap: var(--gap); }
-.resume-doc > .rock { max-width: 780px; }
-.rz-name { font-size: 1.35rem; font-weight: 700; letter-spacing: 0.06em; margin-bottom: 0.4em; }
-.rz-contact { margin: 0; }
-.rz-section .chips + .chips { margin-top: 10px; }
-.rz-entry + .rz-entry { margin-top: 1.5em; }
-.rz-entry > :last-child { margin-bottom: 0; }
-h3.rz-head {
-  margin: 0 0 0.45em;
-  font: 600 1.05rem/1.3 var(--font);
-  letter-spacing: 0;
-  text-transform: none;
-  color: var(--text);
-}
-.rz-meta { display: block; margin-top: 0.25em; font: 400 0.75rem/1.4 var(--mono); color: var(--muted); }
-.resume-doc a { overflow-wrap: anywhere; }
-
-@media (max-width: 940px) {
-  .resume { display: none; }
-  .resume-doc { display: flex; }
-}
+.resume-fallback { padding: 24px; color: #222; text-shadow: none; }
+.resume-fallback a { color: #0b5cad; }
+.resume-page { display: none; }
+.resume-page img { display: block; width: 100%; height: auto; border-radius: 10px; }
 
 .site-footer { margin-bottom: 96px; padding: 14px 22px; font-size: 0.85rem; color: var(--muted); }
 .site-footer.rock { width: fit-content; padding: 14px 22px; }
@@ -309,3 +289,8 @@ h3.rz-head {
   .resume { padding: 10px; }
   .resume-frame { height: 70vh; min-height: 420px; }
 }
+
+/* Phones, and browsers without an inline PDF viewer, get an image of the
+   page that opens the PDF when tapped. */
+.no-pdf .resume-frame { display: none; }
+.no-pdf .resume-page { display: block; }
