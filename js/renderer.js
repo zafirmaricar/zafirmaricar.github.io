@@ -148,6 +148,37 @@ void main() {
   gl_FragColor = vec4(w * 0.45, w * clamp(v_speed * 0.08, 0.0, 1.0) * 0.45, 0.0, 1.0);
 }`;
 
+  // Rubber ducks: one textured quad per duck, rotated about its centre of
+  // mass and mirrored for ducks facing left. The texture is premultiplied.
+  const DUCK_VS = `
+attribute vec2 a_q;
+uniform vec2 u_scroll;
+uniform vec2 u_res;
+uniform vec2 u_pos;
+uniform vec2 u_rot;
+uniform vec2 u_offset;
+uniform float u_half;
+uniform float u_flip;
+varying vec2 v_uv;
+void main() {
+  vec2 l = a_q * u_half;
+  vec2 p = vec2(u_rot.x * l.x - u_rot.y * l.y, u_rot.y * l.x + u_rot.x * l.y) + u_pos + u_offset - u_scroll;
+  v_uv = vec2(u_flip * a_q.x, a_q.y) * 0.5 + 0.5;
+  gl_Position = vec4(p.x / u_res.x * 2.0 - 1.0, 1.0 - p.y / u_res.y * 2.0, 0.0, 1.0);
+}`;
+
+  const DUCK_FS = `
+precision mediump float;
+uniform sampler2D u_tex;
+uniform float u_alpha;
+uniform float u_shadow;
+varying vec2 v_uv;
+void main() {
+  vec4 c = texture2D(u_tex, v_uv);
+  if (u_shadow > 0.5) c = vec4(0.0, 0.0, 0.0, c.a * 0.35);
+  gl_FragColor = c * u_alpha;
+}`;
+
   const QUAD_VS = `
 attribute vec2 a_q;
 varying vec2 v_uv;
@@ -276,6 +307,7 @@ void main() {
       this.flat = program(gl, FLAT_VS, FLAT_FS);
       this.point = program(gl, POINT_VS, POINT_FS);
       this.composite = program(gl, QUAD_VS, COMPOSITE_FS);
+      this.duck = program(gl, DUCK_VS, DUCK_FS);
       this.rockBuf = gl.createBuffer();
       this.rockVerts = 0;
       this.holeBuf = gl.createBuffer();
@@ -287,6 +319,10 @@ void main() {
       this.quadBuf = gl.createBuffer();
       gl.bindBuffer(gl.ARRAY_BUFFER, this.quadBuf);
       gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+      this.duckQuad = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.duckQuad);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]), gl.STATIC_DRAW);
+      this.duckTex = null; // uploaded on first use
       this.noiseTex = this.bakeNoise(512);
       this.fbo = null;
       this.width = 0; this.height = 0; this.dpr = 1;
@@ -470,11 +506,49 @@ void main() {
       }
     }
 
+    // ducks: { list: [{ x, y, angle, flip, alpha }], sprite: { canvas, half } }.
+    drawDucks(ducks, scrollX, scrollY) {
+      const gl = this.gl, D = this.duck;
+      if (!this.duckTex) {
+        this.duckTex = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, this.duckTex);
+        gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, ducks.sprite.canvas);
+        gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+        gl.generateMipmap(gl.TEXTURE_2D);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      }
+      gl.useProgram(D.p);
+      gl.uniform2f(D.u.u_scroll, scrollX, scrollY);
+      gl.uniform2f(D.u.u_res, this.width, this.height);
+      gl.uniform1f(D.u.u_half, ducks.sprite.half);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, this.duckTex);
+      gl.uniform1i(D.u.u_tex, 0);
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.duckQuad);
+      gl.enableVertexAttribArray(D.a.a_q);
+      gl.vertexAttribPointer(D.a.a_q, 2, gl.FLOAT, false, 0, 0);
+      for (let pass = 0; pass < 2; pass++) {
+        gl.uniform1f(D.u.u_shadow, pass ? 0 : 1);
+        gl.uniform2f(D.u.u_offset, pass ? 0 : 4, pass ? 0 : 8);
+        for (const d of ducks.list) {
+          gl.uniform2f(D.u.u_pos, d.x, d.y);
+          gl.uniform2f(D.u.u_rot, Math.cos(d.angle), Math.sin(d.angle));
+          gl.uniform1f(D.u.u_flip, d.flip);
+          gl.uniform1f(D.u.u_alpha, Math.max(0, d.alpha));
+          gl.drawArrays(gl.TRIANGLES, 0, 6);
+        }
+      }
+    }
+
     releaseChunk(c) {
       if (c.glBuf) { this.gl.deleteBuffer(c.glBuf); c.glBuf = null; }
     }
 
-    render(sim, scrollX, scrollY, chunks) {
+    render(sim, scrollX, scrollY, chunks, ducks) {
       const gl = this.gl;
       const W = this.width, H = this.height;
 
@@ -531,6 +605,9 @@ void main() {
         gl.disableVertexAttribArray(R.a.a_normal);
         gl.disableVertexAttribArray(R.a.a_edge);
       }
+
+      // Ducks sit under the water so it laps over their hulls.
+      if (ducks && ducks.list.length) this.drawDucks(ducks, scrollX, scrollY);
 
       // Fluid density splat.
       const n = sim.fill(this.partData);

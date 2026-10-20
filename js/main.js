@@ -99,6 +99,9 @@
   });
   window.portfolioFracture = fracture;
 
+  const ducks = new window.Ducks({ size: small ? 42 : 56 });
+  window.portfolioDucks = ducks;
+
   function docWidth() { return document.documentElement.clientWidth; }
   function docHeight() { return document.documentElement.scrollHeight; }
 
@@ -117,6 +120,7 @@
     });
     sim.setRocks(rocks);
     sim.removeInsideRocks();
+    ducks.removeInsideRocks(rocks);
     renderer.setRocks(rocks);
     needsRender = true;
     chunkLayer.style.height = simLayer.style.height = '0';
@@ -175,14 +179,14 @@
     if (rocks.some(function (r) { return window.Rocks.solidAt(r, x, y); })) e.preventDefault();
   });
 
-  // Click a rock to crack it; click open space to splash.
+  // Click a duck to make it hop, a rock to crack it, open space to splash.
   root.addEventListener('click', function (e) {
     if (e.button !== 0 || glLost) return;
     if (e.target.closest('a, button, input, iframe, object, .hud')) return;
     const sel = window.getSelection();
     if (sel && !sel.isCollapsed) return; // the user was selecting text
     const x = e.clientX + window.scrollX, y = e.clientY + window.scrollY;
-    if (!fracture.hit(rocks, x, y)) sim.splash(x, y, 45);
+    if (!ducks.hit(x, y) && !fracture.hit(rocks, x, y)) sim.splash(x, y, 45);
   });
 
   // ---- HUD ----------------------------------------------------------------
@@ -218,7 +222,7 @@
   // and a 30 Hz screen (e.g. iOS Low Power Mode) takes two steps per frame.
   const FRAME_MS = 1000 / 60;
   let lastFrame = 0, steps = 0, lastCheck = -1, slowStreak = 0;
-  let lastTx = NaN, lastTy = NaN, lastCount = 0, lastChunks = 0;
+  let lastTx = NaN, lastTy = NaN, lastCount = 0, lastChunks = 0, lastDucks = 0;
 
   function step(sy, viewH, dw) {
     if (raining) {
@@ -228,9 +232,12 @@
         sim.add(Math.random() * dw, sy - 10 - Math.random() * 40, 0.4 + Math.random() * 0.3, 5 + Math.random() * 2);
       }
     }
+    const view = { left: -40, right: dw + 40, top: sy - 400, bottom: sy + viewH + 60 };
     const moving = fracture.step(rocks, docHeight());
-    sim.setRocks(moving.length ? rocks.concat(moving) : rocks);
-    sim.step({ left: -40, right: dw + 40, top: sy - 400, bottom: sy + viewH + 60 });
+    if (raining) ducks.countdown(rocks, dw, sy, viewH);
+    const floating = ducks.step(rocks, moving, sim, view);
+    sim.setRocks(moving.length || floating.length ? rocks.concat(moving, floating) : rocks);
+    sim.step(view);
     sim.pointer.dx *= 0.5; sim.pointer.dy *= 0.5;
   }
 
@@ -246,14 +253,15 @@
     for (let i = 0; i < n; i++) step(sy, window.innerHeight, dw);
 
     // Skip the redraw when nothing on the canvas changed (rain paused and
-    // dried up, no falling chunks, no scroll): the last frame stays up. A
-    // reallocated canvas is blank, so it always gets redrawn.
+    // dried up, no falling chunks or ducks, no scroll): the last frame stays
+    // up. A reallocated canvas is blank, so it always gets redrawn.
     const tx = sx, ty = sy - OVERSCAN;
     if (resized || needsRender || sim.count || lastCount || fracture.chunks.length || lastChunks ||
-        tx !== lastTx || ty !== lastTy) {
+        ducks.list.length || lastDucks || tx !== lastTx || ty !== lastTy) {
       if (tx !== lastTx || ty !== lastTy) canvas.style.transform = 'translate(' + tx + 'px,' + ty + 'px)';
-      renderer.render(sim, tx, ty, fracture.chunks);
-      lastTx = tx; lastTy = ty; lastCount = sim.count; lastChunks = fracture.chunks.length; needsRender = false;
+      renderer.render(sim, tx, ty, fracture.chunks, ducks);
+      lastTx = tx; lastTy = ty; lastCount = sim.count; lastChunks = fracture.chunks.length;
+      lastDucks = ducks.list.length; needsRender = false;
     }
 
     // Shed particles when the device can't keep up with 60 steps a second.

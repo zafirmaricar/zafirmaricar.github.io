@@ -11,6 +11,14 @@ Rocks can be broken. Clicking a rock cracks it open at that spot, and a second h
 on the same spot breaks that chunk off. The chunk carries the
 text it covered, falls as a rigid body, bounces off the rocks below and pushes
 the water aside until it drops off the page. "Repair rocks" restores everything.
+
+Rubber ducks ride the rain: while there are fewer than three on the page, a
+new one drops in every 7 seconds. Each duck is a light rigid body. Probes
+round its hull feel the nearby water, lifting it where the water is deep
+enough and dragging it along with the flow, so ducks float where water pools
+on the rocks and get carried off by the streams. They bounce off rocks and
+falling chunks, the water flows around them, and clicking one makes it hop.
+
 The simulation runs at a fixed 60 steps per second, so high-refresh screens
 don't speed it up and 30 Hz screens don't slow it down.
 
@@ -22,6 +30,7 @@ don't speed it up and 30 Hz screens don't slow it down.
 - `js/rocks.js`: rock outlines around each `.rock` panel, collision queries (including holes), and fracture geometry
 - `js/renderer.js`: WebGL rendering of the rocks (procedural stone, bevel lighting) and the fluid (screen-space metaballs)
 - `js/fracture.js`: cracks, broken-off chunks (rigid bodies with the panel text cloned and clipped) and per-panel damage
+- `js/ducks.js`: rubber ducks (rigid bodies with buoyancy probes) and their sprite
 - `js/main.js`: tabs, rain, pointer input and the 60 fps main loop
 - `scripts/resume_sync.py` and `.github/workflows/sync-resume.yml`: keep the phone version of the resume in step with the Google Doc
 
