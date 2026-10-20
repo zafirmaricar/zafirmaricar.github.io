@@ -1,0 +1,38 @@
+# Rebuilds assets/resume-doc.html (the phone version of the Resume tab) from
+# the resume's Google Doc and commits it when the doc has changed. Pages then
+# republishes the site. Run it by hand from the Actions tab to sync at once.
+name: Sync resume
+
+on:
+  schedule:
+    - cron: '7,22,37,52 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-resume
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Rebuild from the Google Doc
+        run: python3 -I scripts/resume_sync.py
+
+      - name: Commit if the doc changed
+        run: |
+          if git diff --quiet -- assets/resume-doc.html; then
+            echo "Resume unchanged."
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add assets/resume-doc.html
+          git commit -m 'Sync resume from Google Doc'
+          git pull --rebase origin main
+          git push origin HEAD:main

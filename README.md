@@ -23,12 +23,21 @@ don't speed it up and 30 Hz screens don't slow it down.
 - `js/renderer.js`: WebGL rendering of the rocks (procedural stone, bevel lighting) and the fluid (screen-space metaballs)
 - `js/fracture.js`: cracks, broken-off chunks (rigid bodies with the panel text cloned and clipped) and per-panel damage
 - `js/main.js`: tabs, rain, pointer input and the 60 fps main loop
+- `scripts/resume_sync.py` and `.github/workflows/sync-resume.yml`: keep the phone version of the resume in step with the Google Doc
 
 Any element with the class `rock` becomes a collider automatically.
 
 The Resume tab embeds the resume's Google Doc, and its Download PDF button
 exports the doc's current version, so editing the doc updates the site. The
 doc must stay shared as "Anyone with the link can view".
+
+The doc's fixed-width page doesn't fit a phone, so screens up to 940px wide
+show `assets/resume-doc.html` instead: the doc's text rebuilt as the site's
+own panels, one rock per section, by `scripts/resume_sync.py`. The "Sync
+resume" GitHub Action runs that script every 15 minutes and commits the file
+when the doc has changed; run it from the Actions tab to sync straight away.
+GitHub turns scheduled Actions off after 60 days without a commit to the
+repo; turn "Sync resume" back on from the Actions tab if that happens.
 
 ## Run locally
 

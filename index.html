@@ -199,10 +199,14 @@
           <div class="rock resume-download"><a class="button" href="https://docs.google.com/document/d/1ZrEFIjkGrEvXuVBZgUAULk_GZvu164WiZnew_2Qw-pI/export?format=pdf" target="_blank" rel="noopener">Download PDF</a></div>
         </div>
         <!-- The resume is the live Google Doc, so edits there show up here.
-             It must stay shared as "Anyone with the link can view". -->
+             It must stay shared as "Anyone with the link can view".
+             Wide screens embed the doc itself. Its fixed-width page doesn't
+             fit a phone, so phones load assets/resume-doc.html instead: the
+             doc rebuilt as panels by the "Sync resume" Action. -->
         <div class="rock resume">
           <iframe class="resume-frame" data-src="https://docs.google.com/document/d/1ZrEFIjkGrEvXuVBZgUAULk_GZvu164WiZnew_2Qw-pI/preview" title="Resume of Zafir Maricar"></iframe>
         </div>
+        <div class="resume-doc" data-src="assets/resume-doc.html"></div>
       </section>
     </main>
 

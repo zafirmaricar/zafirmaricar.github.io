@@ -4,8 +4,42 @@
   const pages = document.querySelectorAll('[data-page]');
   const tabs = document.querySelectorAll('[data-tab]');
   const resumeFrame = document.querySelector('.resume-frame');
+  const resumeDoc = document.querySelector('.resume-doc');
+  // Same breakpoint as style.css: below it the embedded doc's page doesn't
+  // fit, so the doc rebuilt as panels is shown instead.
+  const narrowResume = window.matchMedia('(max-width: 940px)');
+  let resumeDocLoading = false, resumeDocLoaded = false;
   let onLayoutChange = function () {};
   let onPageChange = function () {};
+
+  // Load whichever resume view this screen shows, once.
+  function loadResume() {
+    if (!narrowResume.matches) {
+      if (!resumeFrame.src) resumeFrame.src = resumeFrame.dataset.src;
+      return;
+    }
+    if (resumeDocLoading || resumeDocLoaded) return;
+    resumeDocLoading = true;
+    fetch(resumeDoc.dataset.src, { cache: 'no-cache' })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+      .then(function (html) {
+        resumeDoc.innerHTML = html; // our own file, built by scripts/resume_sync.py
+        resumeDocLoaded = true;
+      })
+      .catch(function () {
+        // Not loaded (offline, or opened from a file): point at the doc
+        // itself and try again the next time the tab opens.
+        resumeDoc.innerHTML = '<p class="rock">The resume didn\'t load. Use Download PDF above, or ' +
+          '<a href="https://docs.google.com/document/d/1ZrEFIjkGrEvXuVBZgUAULk_GZvu164WiZnew_2Qw-pI/edit?usp=sharing" ' +
+          'target="_blank" rel="noopener">open the Google Doc</a>.</p>';
+      })
+      .then(function () { resumeDocLoading = false; onLayoutChange(); });
+  }
+  function onResumeWidthChange() {
+    if (!document.querySelector('[data-page="resume"]').hidden) loadResume();
+  }
+  if (narrowResume.addEventListener) narrowResume.addEventListener('change', onResumeWidthChange);
+  else if (narrowResume.addListener) narrowResume.addListener(onResumeWidthChange);
 
   function showPage() {
     const id = (location.hash || '#home').slice(1);
@@ -16,8 +50,8 @@
       t.classList.toggle('active', on);
       if (on) t.setAttribute('aria-current', 'page'); else t.removeAttribute('aria-current');
     });
-    // Load the embedded Google Doc only when someone opens the Resume tab.
-    if (target === 'resume' && !resumeFrame.src) resumeFrame.src = resumeFrame.dataset.src;
+    // Load the resume only when someone opens the Resume tab.
+    if (target === 'resume') loadResume();
     window.scrollTo(0, 0);
     onPageChange();
     onLayoutChange();
