@@ -23,10 +23,12 @@ don't speed it up and 30 Hz screens don't slow it down.
 - `js/renderer.js`: WebGL rendering of the rocks (procedural stone, bevel lighting) and the fluid (screen-space metaballs)
 - `js/fracture.js`: cracks, broken-off chunks (rigid bodies with the panel text cloned and clipped) and per-panel damage
 - `js/main.js`: tabs, rain, pointer input and the 60 fps main loop
-- `assets/docs/Zafir_Maricar_Resume.pdf`: the resume shown on the Resume tab
-- `assets/img/resume.webp`: an image of the resume page (1192×1684), shown instead of the PDF viewer on phones and in browsers without one. Re-render it when the PDF changes.
 
 Any element with the class `rock` becomes a collider automatically.
+
+The Resume tab embeds the resume's Google Doc, and its Download PDF button
+exports the doc's current version, so editing the doc updates the site. The
+doc must stay shared as "Anyone with the link can view".
 
 ## Run locally
 

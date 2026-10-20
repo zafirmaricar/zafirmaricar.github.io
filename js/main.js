@@ -3,6 +3,7 @@
 
   const pages = document.querySelectorAll('[data-page]');
   const tabs = document.querySelectorAll('[data-tab]');
+  const resumeFrame = document.querySelector('.resume-frame');
   let onLayoutChange = function () {};
   let onPageChange = function () {};
 
@@ -15,17 +16,14 @@
       t.classList.toggle('active', on);
       if (on) t.setAttribute('aria-current', 'page'); else t.removeAttribute('aria-current');
     });
+    // Load the embedded Google Doc only when someone opens the Resume tab.
+    if (target === 'resume' && !resumeFrame.src) resumeFrame.src = resumeFrame.dataset.src;
     window.scrollTo(0, 0);
     onPageChange();
     onLayoutChange();
   }
 
   document.getElementById('year').textContent = new Date().getFullYear();
-  // Without an inline PDF viewer the resume tab shows an image of the page.
-  // Phones count too: iOS paints a PDF <object> as a static, squashed image.
-  if (navigator.pdfViewerEnabled === false || window.matchMedia('(pointer: coarse)').matches) {
-    document.querySelector('.resume').classList.add('no-pdf');
-  }
   window.addEventListener('hashchange', showPage);
   showPage();
 

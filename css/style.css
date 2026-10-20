@@ -219,10 +219,6 @@ h1.rock.resume-title { font-size: 2rem; margin: 0; padding: 16px 28px; }
   border-radius: 10px;
   background: #fff;
 }
-.resume-fallback { padding: 24px; color: #222; text-shadow: none; }
-.resume-fallback a { color: #0b5cad; }
-.resume-page { display: none; }
-.resume-page img { display: block; width: 100%; height: auto; border-radius: 10px; }
 
 .site-footer { margin-bottom: 96px; padding: 14px 22px; font-size: 0.85rem; color: var(--muted); }
 .site-footer.rock { width: fit-content; padding: 14px 22px; }
@@ -289,8 +285,3 @@ h1.rock.resume-title { font-size: 2rem; margin: 0; padding: 16px 28px; }
   .resume { padding: 10px; }
   .resume-frame { height: 70vh; min-height: 420px; }
 }
-
-/* Phones, and browsers without an inline PDF viewer, get an image of the
-   page that opens the PDF when tapped. */
-.no-pdf .resume-frame { display: none; }
-.no-pdf .resume-page { display: block; }
