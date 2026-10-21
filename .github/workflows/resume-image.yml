@@ -1,0 +1,61 @@
+# Renders the phone image of the resume (assets/img/resume.webp) when the PDF
+# is pushed without it, e.g. when ./update_resume found no local tools.
+name: Resume image
+
+on:
+  push:
+    branches: [main]
+    paths: [assets/docs/Zafir_Maricar_Resume.pdf]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+
+concurrency:
+  group: resume-image
+  cancel-in-progress: false
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check whether the image is older than the PDF
+        id: check
+        run: |
+          pdf=$(git log -1 --format=%ct -- assets/docs/Zafir_Maricar_Resume.pdf)
+          img=$(git log -1 --format=%ct -- assets/img/resume.webp)
+          if [ "${{ github.event_name }}" != workflow_dispatch ] && [ "$img" -ge "$pdf" ]; then
+            echo "resume.webp is already up to date"
+            echo "stale=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "stale=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Render the first page at 144 dpi
+        if: steps.check.outputs.stale == 'true'
+        run: |
+          sudo apt-get update -q && sudo apt-get install -yq poppler-utils webp
+          pdftoppm -r 144 -f 1 -l 1 -singlefile -png assets/docs/Zafir_Maricar_Resume.pdf /tmp/page
+          cwebp -quiet -q 82 /tmp/page.png -o assets/img/resume.webp
+          read -r w h < <(od -An -tu1 -j16 -N8 /tmp/page.png | awk '{print $1*16777216+$2*65536+$3*256+$4, $5*16777216+$6*65536+$7*256+$8}')
+          echo "Rendered ${w}x${h}"
+          sed -i -E "s#(src=\"assets/img/resume.webp\" width=\")[0-9]+(\" height=\")[0-9]+#\1$w\2$h#" index.html
+
+      - name: Commit and push
+        if: steps.check.outputs.stale == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git add assets/img/resume.webp index.html
+          if git diff --cached --quiet; then echo "No change"; exit 0; fi
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -m "Render the resume's phone image"
+          git pull --rebase origin main
+          git push origin HEAD:main
+          # Pushes made with the workflow token may not start a Pages build on their own.
+          gh api -X POST "repos/${{ github.repository }}/pages/builds" || true

@@ -1,0 +1,175 @@
+#!/usr/bin/env bash
+# Replace the resume on the site with a new PDF, then commit and push.
+#
+#   ./update_resume updatedresume.pdf            # update, commit and push
+#   ./update_resume --no-push updatedresume.pdf  # update and commit only
+#
+# Works in Git Bash on Windows, and in bash on macOS/Linux. Phones show an
+# image of the resume's first page (assets/img/resume.webp, 144 dpi) instead
+# of the PDF. This script renders it with whatever it finds installed:
+#   render: pdftoppm (Poppler), PyMuPDF (Python), or ImageMagick + Ghostscript
+#   encode: cwebp, ImageMagick, or Pillow (Python)
+# If nothing usable is installed it pushes the PDF alone, and the
+# "Resume image" GitHub Action renders the image a minute later.
+
+set -euo pipefail
+
+PDF_DEST="assets/docs/Zafir_Maricar_Resume.pdf"
+IMG_DEST="assets/img/resume.webp"
+DPI=144
+QUALITY=82
+FALLBACK_NAME="Zafir Maricar"
+FALLBACK_EMAIL="40844194+zafirmaricar@users.noreply.github.com"
+
+die() { echo "update_resume: $*" >&2; exit 1; }
+say() { echo "==> $*"; }
+
+usage() {
+  echo "Usage: ./update_resume [--no-push] path/to/resume.pdf"
+  exit "${1:-0}"
+}
+
+push=1
+src=""
+for arg in "$@"; do
+  case "$arg" in
+    -h|--help) usage 0 ;;
+    -n|--no-push) push=0 ;;
+    -*) echo "Unknown option: $arg" >&2; usage 1 ;;
+    *) [ -z "$src" ] || usage 1; src="$arg" ;;
+  esac
+done
+[ -n "$src" ] || usage 1
+[ -f "$src" ] || die "no such file: $src"
+[ "$(head -c 5 "$src")" = "%PDF-" ] || die "$src is not a PDF"
+
+# Resolve the PDF before moving to the repo root, so relative paths work.
+src="$(cd "$(dirname "$src")" && pwd)/$(basename "$src")"
+cd "$(dirname "${BASH_SOURCE[0]}")"
+cd "$(git rev-parse --show-toplevel)" || die "run this from inside the site's git clone"
+
+# --- Checks before touching anything -------------------------------------
+
+branch="$(git symbolic-ref --short -q HEAD || true)"
+[ "$branch" = "main" ] || die "switch to the main branch first (on '${branch:-detached HEAD}')"
+gitdir="$(git rev-parse --git-dir)"
+for f in MERGE_HEAD REBASE_HEAD rebase-merge rebase-apply CHERRY_PICK_HEAD; do
+  [ ! -e "$gitdir/$f" ] || die "finish or abort the merge/rebase in progress first"
+done
+if [ -n "$(git status --porcelain -- "$PDF_DEST" "$IMG_DEST" index.html)" ]; then
+  git status --short -- "$PDF_DEST" "$IMG_DEST" index.html
+  die "these files have uncommitted changes; commit or discard them first"
+fi
+
+if [ "$push" = 1 ]; then
+  say "Pulling the latest main"
+  git pull --ff-only origin main || die "couldn't fast-forward main; sync it (e.g. in GitHub Desktop) and retry"
+fi
+
+if cmp -s "$src" "$PDF_DEST"; then
+  say "That PDF is already the one on the site; nothing to do."
+  exit 0
+fi
+
+# --- Find tools ----------------------------------------------------------
+
+has() { command -v "$1" >/dev/null 2>&1; }
+
+# A Python that can import the given modules. On Windows "python" may be the
+# Microsoft Store stub, which fails the import and is skipped.
+py_with() {
+  local p
+  for p in python3 python py; do
+    if has "$p" && "$p" -c "import $1" >/dev/null 2>&1; then echo "$p"; return 0; fi
+  done
+  return 1
+}
+
+# Windows ships its own convert.exe, so ImageMagick is only used as "magick".
+magick_pdf_ok() { has magick && { has gs || has gswin64c || has gswin32c; }; }
+
+# --- Render the first page to PNG ----------------------------------------
+
+tmp="$gitdir/update_resume.tmp"
+rm -rf "$tmp"; mkdir -p "$tmp"
+trap 'rm -rf "$tmp"' EXIT
+cp "$src" "$tmp/in.pdf"
+png="$tmp/page.png"
+
+rendered=""
+if has pdftoppm && pdftoppm -r "$DPI" -f 1 -l 1 -singlefile -png "$tmp/in.pdf" "$tmp/page" 2>/dev/null && [ -s "$png" ]; then
+  rendered="pdftoppm"
+elif py="$(py_with fitz)" && "$py" - "$tmp/in.pdf" "$png" "$DPI" <<'EOF' 2>/dev/null && [ -s "$png" ]; then
+import sys, fitz
+doc = fitz.open(sys.argv[1])
+doc[0].get_pixmap(dpi=int(sys.argv[3]), alpha=False).save(sys.argv[2])
+EOF
+  rendered="PyMuPDF"
+elif magick_pdf_ok && magick -density "$DPI" "$tmp/in.pdf[0]" -background white -alpha remove -alpha off "$png" 2>/dev/null && [ -s "$png" ]; then
+  rendered="ImageMagick"
+fi
+
+# --- Encode it as WebP ---------------------------------------------------
+
+encoded=""
+if [ -n "$rendered" ]; then
+  webp="$tmp/resume.webp"
+  if has cwebp && cwebp -quiet -q "$QUALITY" "$png" -o "$webp" 2>/dev/null && [ -s "$webp" ]; then
+    encoded="cwebp"
+  elif has magick && magick "$png" -quality "$QUALITY" "$webp" 2>/dev/null && [ -s "$webp" ]; then
+    encoded="ImageMagick"
+  elif py="$(py_with PIL)" && "$py" - "$png" "$webp" "$QUALITY" <<'EOF' 2>/dev/null && [ -s "$webp" ]; then
+import sys
+from PIL import Image
+Image.open(sys.argv[1]).convert("RGB").save(sys.argv[2], "WEBP", quality=int(sys.argv[3]))
+EOF
+    encoded="Pillow"
+  fi
+fi
+
+# --- Update the site files -----------------------------------------------
+
+say "Copying the PDF to $PDF_DEST"
+cp "$src" "$PDF_DEST"
+files=("$PDF_DEST")
+
+if [ -n "$encoded" ]; then
+  # PNG stores width and height as big-endian 32-bit ints at bytes 16 and 24.
+  read -r w h < <(od -An -tu1 -j16 -N8 "$png" | awk '{print $1*16777216+$2*65536+$3*256+$4, $5*16777216+$6*65536+$7*256+$8}')
+  say "Phone image: ${w}x${h} (rendered with $rendered, encoded with $encoded)"
+  cp "$webp" "$IMG_DEST"
+  sed -i.bak -E "s#(src=\"$IMG_DEST\" width=\")[0-9]+(\" height=\")[0-9]+#\1$w\2$h#" index.html
+  rm -f index.html.bak
+  files+=("$IMG_DEST" index.html)
+else
+  echo
+  echo "No PDF renderer/WebP encoder found, so the phone image will be made by"
+  echo "the 'Resume image' GitHub Action about a minute after the push."
+  echo "To render it locally next time, install one of these (then reopen Git Bash):"
+  echo "  - Python packages:  py -m pip install pymupdf pillow     (easiest)"
+  echo "  - Poppler + libwebp: winget install oschwartz10612.Poppler, plus cwebp from"
+  echo "                       https://developers.google.com/speed/webp/download"
+  echo "  - ImageMagick + Ghostscript: winget install ImageMagick.ImageMagick ArtifexSoftware.GhostScript"
+  echo
+fi
+
+# --- Commit and push -----------------------------------------------------
+
+identity=()
+if [ -z "$(git config user.email || true)" ]; then
+  identity=(-c "user.name=$FALLBACK_NAME" -c "user.email=$FALLBACK_EMAIL")
+fi
+
+git add -- "${files[@]}"
+git ${identity[@]+"${identity[@]}"} commit -q -m "Update the resume" -- "${files[@]}"
+say "Committed $(git rev-parse --short HEAD): Update the resume"
+
+if [ "$push" = 1 ]; then
+  say "Pushing to GitHub"
+  if ! git push origin main; then
+    die "push failed. The commit is saved locally; push it from GitHub Desktop ('Push origin') or rerun 'git push origin main'."
+  fi
+  say "Done. The site updates in a minute or two: https://zafirmaricar.github.io/#resume"
+else
+  say "Not pushed (--no-push). Push it with 'git push origin main' or from GitHub Desktop."
+fi

@@ -46,9 +46,35 @@ don't speed it up and 30 Hz screens don't slow it down.
   and the WebM with
   `ffmpeg -i in.gif -an -vf scale=W:-2:flags=lanczos,setsar=1,format=yuv420p -c:v libvpx-vp9 -crf 38 -b:v 0 -row-mt 1 -deadline good -cpu-used 1 out.webm`.
   `setsar=1` matters: some GIFs carry a pixel aspect byte that browsers ignore for GIFs but honour in video.
-- `assets/img/resume.webp`: an image of the resume page (1224×1584, the PDF at 144 dpi), shown instead of the PDF viewer on phones and in browsers without one. Re-render it when the PDF changes.
+- `assets/img/resume.webp`: an image of the resume's first page (the PDF at 144 dpi, 1224×1584 for US Letter), shown instead of the PDF viewer on phones and in browsers without one. `update_resume` re-renders it.
+- `update_resume`: replaces the resume with a new PDF and pushes it (see below)
+- `.github/workflows/resume-image.yml`: renders `resume.webp` on GitHub when a PDF is pushed without it
 
 Any element with the class `rock` becomes a collider automatically.
+
+## Updating the resume
+
+From the root of the clone, in Git Bash (or any bash):
+
+    ./update_resume path/to/updatedresume.pdf
+
+It pulls the latest `main`, copies the PDF to `assets/docs/Zafir_Maricar_Resume.pdf`,
+renders the phone image of its first page to `assets/img/resume.webp` (144 dpi,
+WebP quality 82), sets that image's `width`/`height` in `index.html`, commits
+"Update the resume" and pushes. Pages publishes it a minute or two later. Add
+`--no-push` to commit without pushing.
+
+To render the image it uses the first of these it finds: `pdftoppm` (Poppler),
+PyMuPDF, or ImageMagick with Ghostscript, then `cwebp`, ImageMagick or Pillow to
+encode it. The easiest install on Windows is `py -m pip install pymupdf pillow`.
+If none are installed it pushes only the PDF, and the "Resume image" GitHub
+Action renders and commits the image a minute later, so pull before your next
+change. The Action can also be run by hand from the Actions tab.
+
+The script refuses to run off `main`, during a merge or rebase, or when the
+resume files or `index.html` have uncommitted changes. If the push fails (for
+example Git Bash isn't signed in to GitHub), the commit stays local and can be
+pushed from GitHub Desktop.
 
 ## Run locally
 
