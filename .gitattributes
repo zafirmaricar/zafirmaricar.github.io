@@ -1,2 +1,4 @@
 update_resume text eol=lf
 *.sh text eol=lf
+*.pdf binary
+*.webp binary

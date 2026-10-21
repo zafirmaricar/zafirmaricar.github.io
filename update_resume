@@ -46,6 +46,24 @@ done
 # Resolve the PDF before moving to the repo root, so relative paths work.
 src="$(cd "$(dirname "$src")" && pwd)/$(basename "$src")"
 cd "$(dirname "${BASH_SOURCE[0]}")"
+
+# Under WSL, a clone on the Windows drive (/mnt/c/...) is checked out by
+# Windows git: text files have CRLF endings and every file looks executable.
+# Linux git would see those as changes, so read the clone the way Windows does,
+# and sign in through Windows' Git Credential Manager when it is installed.
+git_opts=()
+if grep -qi microsoft /proc/version 2>/dev/null && [[ "$(pwd -P)" == /mnt/* ]]; then
+  git_opts=(-c core.autocrlf=true -c core.filemode=false -c "safe.directory=*")
+  for gcm in "/mnt/c/Program Files/Git/mingw64/bin/git-credential-manager.exe" \
+             "/mnt/c/Program Files/Git/mingw64/libexec/git-core/git-credential-manager.exe"; do
+    if [ -x "$gcm" ]; then
+      git_opts+=(-c "credential.helper=" -c "credential.helper=${gcm// /\\ }")
+      break
+    fi
+  done
+fi
+git() { command git ${git_opts[@]+"${git_opts[@]}"} "$@"; }
+
 cd "$(git rev-parse --show-toplevel)" || die "run this from inside the site's git clone"
 
 # --- Checks before touching anything -------------------------------------
@@ -56,8 +74,11 @@ gitdir="$(git rev-parse --git-dir)"
 for f in MERGE_HEAD REBASE_HEAD rebase-merge rebase-apply CHERRY_PICK_HEAD; do
   [ ! -e "$gitdir/$f" ] || die "finish or abort the merge/rebase in progress first"
 done
-if [ -n "$(git status --porcelain -- "$PDF_DEST" "$IMG_DEST" index.html)" ]; then
-  git status --short -- "$PDF_DEST" "$IMG_DEST" index.html
+# Compare contents rather than "git status", which can flag a file whose only
+# difference is line endings or timestamps from the other OS.
+git update-index -q --refresh >/dev/null 2>&1 || true
+if ! git diff --quiet HEAD -- "$PDF_DEST" "$IMG_DEST" index.html; then
+  git diff --stat HEAD -- "$PDF_DEST" "$IMG_DEST" index.html
   die "these files have uncommitted changes; commit or discard them first"
 fi
 
