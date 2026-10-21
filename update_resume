@@ -156,16 +156,23 @@ fi
 
 say "Copying the PDF to $PDF_DEST"
 cp "$src" "$PDF_DEST"
-files=("$PDF_DEST")
+files=("$PDF_DEST" index.html)
+
+# Browsers and the Pages CDN cache files for a while, so the links carry a
+# ?v=<content hash> that changes with each new file.
+pdf_v="$(git hash-object "$PDF_DEST" | cut -c1-8)"
+sed -i.bak -E "s#($PDF_DEST)(\?v=[0-9a-f]+)?#\1?v=$pdf_v#g" index.html
+rm -f index.html.bak
 
 if [ -n "$encoded" ]; then
   # PNG stores width and height as big-endian 32-bit ints at bytes 16 and 24.
   read -r w h < <(od -An -tu1 -j16 -N8 "$png" | awk '{print $1*16777216+$2*65536+$3*256+$4, $5*16777216+$6*65536+$7*256+$8}')
   say "Phone image: ${w}x${h} (rendered with $rendered, encoded with $encoded)"
   cp "$webp" "$IMG_DEST"
-  sed -i.bak -E "s#(src=\"$IMG_DEST\" width=\")[0-9]+(\" height=\")[0-9]+#\1$w\2$h#" index.html
+  img_v="$(git hash-object "$IMG_DEST" | cut -c1-8)"
+  sed -i.bak -E "s#src=\"$IMG_DEST(\?v=[0-9a-f]+)?\" width=\"[0-9]+\" height=\"[0-9]+#src=\"$IMG_DEST?v=$img_v\" width=\"$w\" height=\"$h#" index.html
   rm -f index.html.bak
-  files+=("$IMG_DEST" index.html)
+  files+=("$IMG_DEST")
 else
   echo
   echo "No PDF renderer/WebP encoder found, so the phone image will be made by"
@@ -194,7 +201,8 @@ if [ "$push" = 1 ]; then
   if ! git push origin main; then
     die "push failed. The commit is saved locally; push it from GitHub Desktop ('Push origin') or rerun 'git push origin main'."
   fi
-  say "Done. The site updates in a minute or two: https://zafirmaricar.github.io/#resume"
+  say "Done. The site updates in a few minutes: https://zafirmaricar.github.io/#resume"
+  [ -n "$encoded" ] || say "The phone image follows a minute later, from the Resume image Action."
 else
   say "Not pushed (--no-push). Push it with 'git push origin main' or from GitHub Desktop."
 fi

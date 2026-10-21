@@ -10,7 +10,6 @@ on:
 
 permissions:
   contents: write
-  pages: write
 
 concurrency:
   group: resume-image
@@ -44,12 +43,14 @@ jobs:
           cwebp -quiet -q 82 /tmp/page.png -o assets/img/resume.webp
           read -r w h < <(od -An -tu1 -j16 -N8 /tmp/page.png | awk '{print $1*16777216+$2*65536+$3*256+$4, $5*16777216+$6*65536+$7*256+$8}')
           echo "Rendered ${w}x${h}"
-          sed -i -E "s#(src=\"assets/img/resume.webp\" width=\")[0-9]+(\" height=\")[0-9]+#\1$w\2$h#" index.html
+          v=$(git hash-object assets/img/resume.webp | cut -c1-8)
+          sed -i -E "s#src=\"assets/img/resume.webp(\?v=[0-9a-f]+)?\" width=\"[0-9]+\" height=\"[0-9]+#src=\"assets/img/resume.webp?v=$v\" width=\"$w\" height=\"$h#" index.html
+          # Same cache-busting version on the PDF links, in case they lack it.
+          pv=$(git hash-object assets/docs/Zafir_Maricar_Resume.pdf | cut -c1-8)
+          sed -i -E "s#(assets/docs/Zafir_Maricar_Resume.pdf)(\?v=[0-9a-f]+)?#\1?v=$pv#g" index.html
 
       - name: Commit and push
         if: steps.check.outputs.stale == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           git add assets/img/resume.webp index.html
           if git diff --cached --quiet; then echo "No change"; exit 0; fi
@@ -57,5 +58,3 @@ jobs:
             commit -m "Render the resume's phone image"
           git pull --rebase origin main
           git push origin HEAD:main
-          # Pushes made with the workflow token may not start a Pages build on their own.
-          gh api -X POST "repos/${{ github.repository }}/pages/builds" || true

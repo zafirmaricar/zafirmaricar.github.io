@@ -65,7 +65,8 @@ isn't installed.
 
 It pulls the latest `main`, copies the PDF to `assets/docs/Zafir_Maricar_Resume.pdf`,
 renders the phone image of its first page to `assets/img/resume.webp` (144 dpi,
-WebP quality 82), sets that image's `width`/`height` in `index.html`, commits
+WebP quality 82), sets that image's `width`/`height` in `index.html`, bumps the `?v=` version
+on the PDF and image links (so browsers and the Pages cache fetch the new files), commits
 "Update the resume" and pushes. Pages publishes it a minute or two later. Add
 `--no-push` to commit without pushing.
 
