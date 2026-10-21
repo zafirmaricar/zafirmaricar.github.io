@@ -19,6 +19,13 @@ enough and dragging it along with the flow, so ducks float where water pools
 on the rocks and get carried off by the streams. They bounce off rocks and
 falling chunks, the water flows around them, and clicking one makes it hop.
 
+The Projects tab shows each project's images and clips from the old Google
+Site. The GIFs are converted to short looping videos (H.264 MP4 with a VP9
+WebM fallback), which load and play only while on screen. Projects with
+several items get a small gallery like the old site's carousels. Media can be
+cracked and broken off like the rest of the rock; the cracks are drawn over it
+too.
+
 The simulation runs at a fixed 60 steps per second, so high-refresh screens
 don't speed it up and 30 Hz screens don't slow it down.
 
@@ -31,8 +38,14 @@ don't speed it up and 30 Hz screens don't slow it down.
 - `js/renderer.js`: WebGL rendering of the rocks (procedural stone, bevel lighting) and the fluid (screen-space metaballs)
 - `js/fracture.js`: cracks, broken-off chunks (rigid bodies with the panel text cloned and clipped) and per-panel damage
 - `js/ducks.js`: rubber ducks (rigid bodies with buoyancy probes) and their sprite
+- `js/media.js`: project media: clips that play only on screen, gallery thumbnails, and the YouTube poster that loads the player when tapped
 - `js/main.js`: tabs, rain, pointer input and the 60 fps main loop
 - `assets/docs/Zafir_Maricar_Resume.pdf`: the resume shown on the Resume tab, exported from the resume's Google Doc
+- `assets/img/projects/`: project media. Each clip is `<name>.mp4` + `<name>.webm` with a `<name>.webp` poster (its first frame); stills are `<name>.webp` (at most 960 px wide); gallery thumbnails are `<name>-thumb.webp` (92 px tall, taken 40% into a clip). Clips were made from the GIFs with
+  `ffmpeg -i in.gif -an -vf scale=W:-2:flags=lanczos,setsar=1,format=yuv420p -c:v libx264 -preset veryslow -crf 26 -profile:v high -movflags +faststart out.mp4`
+  and the WebM with
+  `ffmpeg -i in.gif -an -vf scale=W:-2:flags=lanczos,setsar=1,format=yuv420p -c:v libvpx-vp9 -crf 38 -b:v 0 -row-mt 1 -deadline good -cpu-used 1 out.webm`.
+  `setsar=1` matters: some GIFs carry a pixel aspect byte that browsers ignore for GIFs but honour in video.
 - `assets/img/resume.webp`: an image of the resume page (1224×1584, the PDF at 144 dpi), shown instead of the PDF viewer on phones and in browsers without one. Re-render it when the PDF changes.
 
 Any element with the class `rock` becomes a collider automatically.
@@ -42,3 +55,6 @@ Any element with the class `rock` becomes a collider automatically.
     python3 -m http.server 8000
 
 Then open http://localhost:8000. Opening `index.html` directly also works.
+Safari only plays video from servers that answer byte-range requests, which
+`http.server` doesn't, so to see the project clips in Safari use something
+like `npx http-server -p 8000` instead. GitHub Pages handles ranges.

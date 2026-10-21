@@ -40,6 +40,7 @@
       rock.el = el; rock.ox = ox; rock.oy = oy;
       rock.cracks = [];
       const s = this.damage.get(el);
+      paintMedia(el, s);
       if (!s) return;
       // Damage is stored relative to the panel, so after a reflow (e.g. the
       // phone was rotated) it can reach past the new outline. Clip it to
@@ -109,6 +110,7 @@
         for (let k = 0; k < 3; k++) spot.cracks.push(crackLine(lx, ly, 30 + Math.random() * 30));
       }
       spot.hits++;
+      s.rev = (s.rev || 0) + 1;
 
       if (spot.hits >= HITS_TO_BREAK) {
         s.spots.splice(s.spots.indexOf(spot), 1);
@@ -158,6 +160,27 @@
         const pad = document.createElement('div');
         pad.className = n.className;
         n.replaceWith(pad);
+      });
+      // A piece of a playing clip keeps the frame it showed when it broke.
+      // Clips hidden in a gallery are dropped so the piece shows what was on
+      // screen.
+      const clips = el.querySelectorAll('video');
+      ghost.querySelectorAll('video').forEach((n, i) => {
+        const src = clips[i];
+        if (n.hidden) { n.remove(); return; }
+        let still;
+        if (src.readyState >= 2) {
+          still = document.createElement('canvas');
+          still.width = src.videoWidth; still.height = src.videoHeight;
+          still.getContext('2d').drawImage(src, 0, 0);
+        } else if (src.poster) {
+          still = document.createElement('img');
+          still.src = src.poster;
+        } else {
+          still = document.createElement('div');
+        }
+        still.className = n.className;
+        n.replaceWith(still);
       });
       const box = el.getBoundingClientRect();
       const w = box.width, h = box.height;
@@ -373,6 +396,101 @@
     for (const k of ['maskSize', 'webkitMaskSize']) el.style[k] = size + 'px ' + size + 'px';
     for (const k of ['maskRepeat', 'webkitMaskRepeat']) el.style[k] = 'no-repeat';
     for (const k of ['maskPosition', 'webkitMaskPosition']) el.style[k] = '0 0';
+  }
+
+  // Images and clips cover the stone, which hides the cracks drawn on the
+  // canvas, so the cracks and fresh fracture rims are drawn again on top of
+  // each media box and thumbnail as an SVG overlay. A box gets only the marks
+  // that reach it, and is redrawn only when the damage or its place in the
+  // panel changed, since this runs for every rock on every rebuild.
+  const TAPER = 3;               // stroke widths along each crack, thick to thin
+  const drawn = new WeakMap();   // media box or thumb -> key of what it shows
+  const marked = new WeakSet();  // panels that may carry overlays
+
+  function paintMedia(el, s) {
+    if (!s) {
+      if (!marked.has(el)) return;
+      marked.delete(el);
+      el.querySelectorAll('.media, .thumb').forEach((m) => {
+        drawn.delete(m);
+        const old = m.querySelector(':scope > .media-cracks');
+        if (old) old.remove();
+      });
+      return;
+    }
+    const boxes = el.querySelectorAll('.media, .thumb');
+    if (!boxes.length) return;
+    marked.add(el);
+    // Read every rect before writing, so the rebuild doesn't force a layout
+    // per box.
+    const pr = el.getBoundingClientRect();
+    const rects = Array.prototype.map.call(boxes, (m) => m.getBoundingClientRect());
+    let marks = null;
+    boxes.forEach((m, b) => {
+      const r = rects[b];
+      const dx = r.left - pr.left, dy = r.top - pr.top;
+      const key = s.rev + ':' + dx.toFixed(1) + ',' + dy.toFixed(1) + ',' + r.width.toFixed(1) + ',' + r.height.toFixed(1);
+      if (drawn.get(m) === key) return;
+      drawn.set(m, key);
+      const old = m.querySelector(':scope > .media-cracks');
+      if (old) old.remove();
+      if (!marks) marks = damageMarks(s);
+      let rims = '', light = '', dark = '';
+      for (const mk of marks) {
+        const p = mk.pad;
+        if (mk.x1 + p < dx || mk.x0 - p > dx + r.width || mk.y1 + p < dy || mk.y0 - p > dy + r.height) continue;
+        rims += mk.rim; light += mk.light; dark += mk.dark;
+      }
+      if (!rims && !dark) return;
+      const svg = document.createElementNS(SVG_NS, 'svg');
+      svg.setAttribute('class', 'media-cracks');
+      svg.setAttribute('aria-hidden', 'true');
+      svg.setAttribute('fill', 'none');
+      svg.setAttribute('stroke-linecap', 'round');
+      svg.setAttribute('stroke-linejoin', 'round');
+      svg.innerHTML = '<g transform="translate(' + (-dx).toFixed(1) + ' ' + (-dy).toFixed(1) + ')">' + rims +
+        '<g transform="translate(.7 1)" stroke="rgba(128,128,133,.3)">' + light + '</g>' +
+        '<g stroke="rgba(8,8,10,.85)">' + dark + '</g></g>';
+      m.appendChild(svg);
+    });
+  }
+
+  // The panel's holes and cracks as SVG in panel px, each with its bounds.
+  // Cracks taper like the canvas ones: a faint light edge under a dark line.
+  function damageMarks(s) {
+    const f = (v) => v.toFixed(1);
+    const marks = [];
+    function mark(pts, pad) {
+      const mk = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity, pad: pad, rim: '', light: '', dark: '' };
+      for (let i = 0; i < pts.length; i += 2) {
+        if (pts[i] < mk.x0) mk.x0 = pts[i]; if (pts[i] > mk.x1) mk.x1 = pts[i];
+        if (pts[i + 1] < mk.y0) mk.y0 = pts[i + 1]; if (pts[i + 1] > mk.y1) mk.y1 = pts[i + 1];
+      }
+      marks.push(mk);
+      return mk;
+    }
+    for (const h of s.holes) {
+      const p = [];
+      for (let i = 0; i < h.pts.length; i += 2) p.push(f(h.pts[i]) + ',' + f(h.pts[i + 1]));
+      const pts = p.join(' ');
+      mark(h.pts, 7).rim = '<polygon points="' + pts + '" stroke="#807d78" stroke-opacity=".3" stroke-width="14"/>' +
+        '<polygon points="' + pts + '" stroke="#807d78" stroke-opacity=".6" stroke-width="5"/>';
+    }
+    for (const sp of s.spots) {
+      for (const c of sp.cracks) {
+        const mk = mark(c, 4), segs = c.length / 2 - 1;
+        for (let k = 0; k < TAPER; k++) {
+          const a = Math.floor((k * segs) / TAPER), b = Math.floor(((k + 1) * segs) / TAPER);
+          if (b <= a) continue;
+          let d = 'M' + f(c[2 * a]) + ' ' + f(c[2 * a + 1]);
+          for (let i = a + 1; i <= b; i++) d += 'L' + f(c[2 * i]) + ' ' + f(c[2 * i + 1]);
+          const t = 1 - (k + 0.5) / TAPER;
+          mk.light += '<path d="' + d + '" stroke-width="' + f(2 * (0.6 + t * 0.8)) + '"/>';
+          mk.dark += '<path d="' + d + '" stroke-width="' + f(2 * (0.6 + t * 1.1)) + '"/>';
+        }
+      }
+    }
+    return marks;
   }
 
   function clearMask(el) {
