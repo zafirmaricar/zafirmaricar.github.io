@@ -47,7 +47,7 @@ don't speed it up and 30 Hz screens don't slow it down.
   `ffmpeg -i in.gif -an -vf scale=W:-2:flags=lanczos,setsar=1,format=yuv420p -c:v libvpx-vp9 -crf 38 -b:v 0 -row-mt 1 -deadline good -cpu-used 1 out.webm`.
   `setsar=1` matters: some GIFs carry a pixel aspect byte that browsers ignore for GIFs but honour in video.
 - `assets/img/resume.webp`: an image of the resume's first page (the PDF at 144 dpi, 1224×1584 for US Letter), shown instead of the PDF viewer on phones and in browsers without one. `update_resume` re-renders it.
-- `update_resume`: replaces the resume with a new PDF and pushes it (see below)
+- `update_resume`: replaces the resume with a new PDF and pushes it (see below); `update_resume.cmd` runs it from cmd or PowerShell
 - `.github/workflows/resume-image.yml`: renders `resume.webp` on GitHub when a PDF is pushed without it
 
 Any element with the class `rock` becomes a collider automatically.
@@ -57,6 +57,11 @@ Any element with the class `rock` becomes a collider automatically.
 From the root of the clone, in Git Bash or WSL (or any bash):
 
     ./update_resume path/to/updatedresume.pdf
+
+From cmd use `update_resume path\to\updatedresume.pdf`, and from PowerShell
+`.\update_resume path\to\updatedresume.pdf`. That runs `update_resume.cmd`,
+which starts the same script with Git Bash, or with WSL if Git for Windows
+isn't installed.
 
 It pulls the latest `main`, copies the PDF to `assets/docs/Zafir_Maricar_Resume.pdf`,
 renders the phone image of its first page to `assets/img/resume.webp` (144 dpi,

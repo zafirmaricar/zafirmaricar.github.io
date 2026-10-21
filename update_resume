@@ -40,6 +40,10 @@ for arg in "$@"; do
   esac
 done
 [ -n "$src" ] || usage 1
+# A Windows path (C:\...) passed in under WSL, e.g. through update_resume.cmd.
+if [[ "$src" =~ ^[A-Za-z]:[\\/] ]] && command -v wslpath >/dev/null 2>&1; then
+  src="$(wslpath -u "$src")"
+fi
 [ -f "$src" ] || die "no such file: $src"
 [ "$(head -c 5 "$src")" = "%PDF-" ] || die "$src is not a PDF"
 
