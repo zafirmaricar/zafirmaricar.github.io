@@ -54,7 +54,7 @@ Any element with the class `rock` becomes a collider automatically.
 
 ## Updating the resume
 
-From the root of the clone, in Git Bash (or any bash):
+From the root of the clone, in Git Bash or WSL (or any bash):
 
     ./update_resume path/to/updatedresume.pdf
 
@@ -75,6 +75,11 @@ The script refuses to run off `main`, during a merge or rebase, or when the
 resume files or `index.html` have uncommitted changes. If the push fails (for
 example Git Bash isn't signed in to GitHub), the commit stays local and can be
 pushed from GitHub Desktop.
+
+Under WSL, on the Windows clone (`/mnt/c/...`), the script reads the repo the way
+Windows git does (CRLF line endings, no executable bits), so files GitHub Desktop
+checked out don't look modified, and it pushes through Windows' Git Credential
+Manager when Git for Windows is installed.
 
 ## Run locally
 
