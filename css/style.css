@@ -95,6 +95,11 @@ li + li { margin-top: 0.35em; }
   box-shadow: none;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
 }
+/* When the browser composites without the GPU (Edge and Chrome fall back to
+   this after GPU trouble), an opaque video, iframe or PDF viewer wrongly hides
+   the canvas in a band around it, taking the stone and rain with it. A layer
+   that isn't quite opaque never hides what's under it. */
+.sim-on .media, .sim-on .resume-frame { opacity: 0.999; }
 
 .site-header {
   display: flex;
