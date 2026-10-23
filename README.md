@@ -19,14 +19,16 @@ enough and dragging it along with the flow, so ducks float where water pools
 on the rocks and get carried off by the streams. They bounce off rocks and
 falling chunks, the water flows around them, and clicking one makes it hop.
 
-On phones a "Tilt" button sits next to "Repair rocks". With it on, gravity
-for the water and the ducks points at the real ground, worked out from the
-phone's orientation (`deviceorientation`), so tipping the phone side to side
-slants the rain, pours the pooled water off the rocks and slides the ducks
-along. The rain then comes in through the top and the upwind side of the
-screen. Broken-off chunks still fall straight down. iOS asks for motion
-access on the first tap; if that is refused the button is struck out.
-Desktops never show the button.
+On phones, gravity for the water and the ducks points at the real ground,
+worked out from the phone's orientation (`deviceorientation`), so tipping the
+phone side to side slants the rain, pours the pooled water off the rocks and
+slides the ducks along. The rain then comes in through the top and the upwind
+side of the screen. Broken-off chunks still fall straight down. Tilt is on
+from the start, and a "Tilt" button next to "Repair rocks" turns it off and
+on. Android needs no permission. iOS only shares orientation after asking,
+and only shows its prompt from a tap, so the page asks on arrival (which
+works if this visit already answered) and then on the first tap anywhere; if
+access is refused the button is struck out. Desktops never show the button.
 
 The Projects tab shows each project's images and clips from the old Google
 Site. The GIFs are converted to short looping videos (H.264 MP4 with a VP9

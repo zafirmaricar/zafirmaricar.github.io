@@ -168,11 +168,15 @@
   document.getElementById('repair').addEventListener('click', function () { fracture.repair(); });
 
   // ---- Tilt ---------------------------------------------------------------
-  // Phones only: with Tilt on, gravity for the water and the ducks points at
-  // the real ground, so tilting the phone side to side pours the water.
+  // Phones only: gravity for the water and the ducks points at the real
+  // ground, so tilting the phone side to side pours the water. On from the
+  // start; the Tilt button turns it off and on.
   const MAX_TILT = (80 * Math.PI) / 180;
   let tiltOn = false, tiltTarget = 0, tilt = 0; // radians from straight down, + towards the right
   const tiltBtn = document.getElementById('tilt');
+  let tiltWanted = true;
+  // iOS only hands out orientation once the visitor allows it.
+  let tiltAllowed = !window.DeviceOrientationEvent || typeof DeviceOrientationEvent.requestPermission !== 'function';
 
   function screenAngle() {
     const o = window.screen && window.screen.orientation;
@@ -196,30 +200,54 @@
     tiltTarget = Math.max(-MAX_TILT, Math.min(MAX_TILT, a * flat));
   }
 
-  function setTilt(on) {
+  function syncTilt() {
+    tiltBtn.setAttribute('aria-pressed', String(tiltWanted));
+    const on = tiltWanted && tiltAllowed;
+    if (on === tiltOn) return;
     tiltOn = on;
     tiltTarget = 0;
-    tiltBtn.setAttribute('aria-pressed', String(on));
     if (on) window.addEventListener('deviceorientation', onOrientation);
     else window.removeEventListener('deviceorientation', onOrientation);
   }
 
-  // Refused motion access: iOS won't ask again until Safari restarts.
-  function tiltBlocked() {
-    setTilt(false);
-    tiltBtn.disabled = true;
+  // iOS answers at once if this visit has already allowed or refused motion
+  // access, but only shows its prompt from a tap. So ask on arrival, then on
+  // every tap until there's an answer (one prompt at a time: a tap's
+  // touchend and click both get here).
+  let tiltAsking = false;
+  function askTilt() {
+    if (tiltAllowed || tiltAsking || tiltBtn.disabled) return;
+    tiltAsking = true;
+    DeviceOrientationEvent.requestPermission().then(function (state) {
+      tiltAsking = false;
+      root.removeEventListener('touchend', tapAsk);
+      root.removeEventListener('click', tapAsk);
+      if (state === 'granted') {
+        tiltAllowed = true;
+      } else {
+        tiltWanted = false; // refused: iOS won't ask again until Safari restarts
+        tiltBtn.disabled = true;
+      }
+      syncTilt();
+    }, function () { tiltAsking = false; }); // no tap yet
+  }
+  function tapAsk(e) {
+    if (tiltWanted && !e.target.closest('#tilt')) askTilt();
   }
 
   if (window.DeviceOrientationEvent && window.matchMedia('(pointer: coarse)').matches) {
     tiltBtn.hidden = false;
     tiltBtn.addEventListener('click', function () {
-      if (tiltOn) { setTilt(false); return; }
-      // iOS only hands out orientation after asking, and only from a tap.
-      if (typeof DeviceOrientationEvent.requestPermission !== 'function') { setTilt(true); return; }
-      DeviceOrientationEvent.requestPermission().then(function (state) {
-        if (state === 'granted') setTilt(true); else tiltBlocked();
-      }, tiltBlocked);
+      tiltWanted = !tiltWanted;
+      syncTilt();
+      if (tiltWanted) askTilt();
     });
+    syncTilt();
+    if (!tiltAllowed) {
+      root.addEventListener('touchend', tapAsk);
+      root.addEventListener('click', tapAsk);
+      askTilt();
+    }
   }
 
   // ---- Lost GPU context ---------------------------------------------------
