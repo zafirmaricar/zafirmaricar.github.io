@@ -19,6 +19,15 @@ enough and dragging it along with the flow, so ducks float where water pools
 on the rocks and get carried off by the streams. They bounce off rocks and
 falling chunks, the water flows around them, and clicking one makes it hop.
 
+On phones a "Tilt" button sits next to "Repair rocks". With it on, gravity
+for the water and the ducks points at the real ground, worked out from the
+phone's orientation (`deviceorientation`), so tipping the phone side to side
+slants the rain, pours the pooled water off the rocks and slides the ducks
+along. The rain then comes in through the top and the upwind side of the
+screen. Broken-off chunks still fall straight down. iOS asks for motion
+access on the first tap; if that is refused the button is struck out.
+Desktops never show the button.
+
 The Projects tab shows each project's images and clips from the old Google
 Site. The GIFs are converted to short looping videos (H.264 MP4 with a VP9
 WebM fallback), which load and play only while on screen. Projects with
@@ -39,7 +48,7 @@ don't speed it up and 30 Hz screens don't slow it down.
 - `js/fracture.js`: cracks, broken-off chunks (rigid bodies with the panel text cloned and clipped) and per-panel damage
 - `js/ducks.js`: rubber ducks (rigid bodies with buoyancy probes) and their sprite
 - `js/media.js`: project media: clips that play only on screen, gallery thumbnails, and the YouTube poster that loads the player when tapped
-- `js/main.js`: tabs, rain, pointer input and the 60 fps main loop
+- `js/main.js`: tabs, rain, pointer input, phone tilt and the 60 fps main loop
 - `assets/docs/Zafir_Maricar_Resume.pdf`: the resume shown on the Resume tab, exported from the resume's Google Doc
 - `assets/img/projects/`: project media. Each clip is `<name>.mp4` + `<name>.webm` with a `<name>.webp` poster (its first frame); stills are `<name>.webp` (at most 960 px wide); gallery thumbnails are `<name>-thumb.webp` (92 px tall, taken 40% into a clip). Clips were made from the GIFs with
   `ffmpeg -i in.gif -an -vf scale=W:-2:flags=lanczos,setsar=1,format=yuv420p -c:v libx264 -preset veryslow -crf 26 -profile:v high -movflags +faststart out.mp4`

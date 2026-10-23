@@ -53,6 +53,8 @@
       this.pairCount = 0;
       this.rocks = [];
       this.pointer = { active: false, x: 0, y: 0, dx: 0, dy: 0 };
+      // Unit vector gravity pulls along; tilting a phone turns it.
+      this.down = { x: 0, y: 1 };
     }
 
     setLimit(n) { this.limit = Math.max(0, Math.min(this.capacity, n | 0)); }
@@ -105,8 +107,9 @@
       const maxV = p.maxSpeed;
 
       // Gravity, then advance to predicted positions.
+      const gx = p.gravity * this.down.x, gy = p.gravity * this.down.y;
       for (let i = 0; i < this.count; i++) {
-        vy[i] += p.gravity;
+        vx[i] += gx; vy[i] += gy;
         const s2 = vx[i] * vx[i] + vy[i] * vy[i];
         if (s2 > maxV * maxV) {
           const k = maxV / Math.sqrt(s2);

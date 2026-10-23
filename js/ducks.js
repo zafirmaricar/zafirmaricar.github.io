@@ -185,6 +185,7 @@
       this.colliders = [];
       this.timer = 0;
       this.near = [];
+      this.down = { x: 0, y: 1 }; // gravity's direction, shared with the water by step()
       const P = this.shape.probes.length / 2;
       this.probeAcc = new Float32Array(3 * P * MAX_DUCKS);
       this.probeWorld = new Float32Array(2 * P * MAX_DUCKS);
@@ -203,6 +204,7 @@
     // simulated band in document px. Returns colliders for the water.
     step(rocks, moving, sim, view) {
       const list = this.list;
+      this.down = sim.down;
       if (list.length) this.feelWater(sim);
       for (let k = 0; k < list.length; k++) this.move(list[k], k, rocks, moving, sim.pointer);
       this.separate();
@@ -313,11 +315,13 @@
       const S = this.shape, invI = S.invI;
       const P = S.probes.length / 2;
       const acc = this.probeAcc, pw = this.probeWorld;
+      const down = this.down;
 
       // Gravity, lift and drag from the water. Drag is solved implicitly so a
       // duck deep in fast water can't overshoot the flow; gravity and lift go
-      // through the same solve so they balance where the duck floats.
-      let fx = 0, fy = GRAVITY, tq = 0, lin = 0, ang = 0, lift = 0;
+      // through the same solve so they balance where the duck floats. Lift
+      // pushes straight against gravity.
+      let fx = GRAVITY * down.x, fy = GRAVITY * down.y, tq = 0, lin = 0, ang = 0, lift = 0;
       for (let p = 0; p < P; p++) {
         const W = acc[3 * (k * P + p)];
         if (W < 1e-4) continue;
@@ -327,7 +331,7 @@
         const c = DRAG * f;
         // Force c * (u - v - w x r) plus lift; the -c * v and -c * w x r
         // parts are taken implicitly below.
-        const gx = c * (ux - d.vx), gy = c * (uy - d.vy) - LIFT * f;
+        const gx = c * (ux - d.vx) - LIFT * f * down.x, gy = c * (uy - d.vy) - LIFT * f * down.y;
         fx += gx + c * d.w * ry; fy += gy - c * d.w * rx;
         tq += rx * gy - ry * gx;
         lin += c;
@@ -350,7 +354,8 @@
         }
       }
 
-      d.w += -RIGHTING * Math.sin(d.angle) * (0.4 + 0.6 * d.wet);
+      // Upright means head away from gravity, so a tilt turns that too.
+      d.w += -RIGHTING * Math.sin(d.angle + Math.atan2(down.x, down.y)) * (0.4 + 0.6 * d.wet);
       d.w *= 0.99;
       d.vx *= 0.997; d.vy *= 0.997;
 
@@ -413,12 +418,14 @@
       }
     }
 
-    // A click on a duck makes it hop. Returns true if (x, y) hit one.
+    // A click on a duck makes it hop, against gravity. Returns true if (x, y)
+    // hit one.
     hit(x, y) {
-      const reach = this.shape.radius * 0.85;
+      const reach = this.shape.radius * 0.85, down = this.down;
       for (const d of this.list) {
         if (Math.hypot(x - d.x, y - d.y) > reach) continue;
-        d.vy = Math.min(d.vy, -6);
+        const vn = d.vx * down.x + d.vy * down.y;
+        if (vn > -6) { d.vx -= (vn + 6) * down.x; d.vy -= (vn + 6) * down.y; }
         d.vx += (d.x - x) * 0.05 + (Math.random() - 0.5);
         d.w += (Math.random() - 0.5) * 0.15;
         return true;

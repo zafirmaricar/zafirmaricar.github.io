@@ -386,6 +386,8 @@ h1.rock.resume-title { font-size: 2rem; margin: 0; padding: 16px 28px; }
   cursor: pointer;
 }
 .hud button:hover { background: rgba(255, 255, 255, 0.16); }
+.hud #tilt[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.hud button:disabled { opacity: 0.5; text-decoration: line-through; cursor: default; }
 
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 

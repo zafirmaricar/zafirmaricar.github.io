@@ -167,6 +167,61 @@
   syncRainButton();
   document.getElementById('repair').addEventListener('click', function () { fracture.repair(); });
 
+  // ---- Tilt ---------------------------------------------------------------
+  // Phones only: with Tilt on, gravity for the water and the ducks points at
+  // the real ground, so tilting the phone side to side pours the water.
+  const MAX_TILT = (80 * Math.PI) / 180;
+  let tiltOn = false, tiltTarget = 0, tilt = 0; // radians from straight down, + towards the right
+  const tiltBtn = document.getElementById('tilt');
+
+  function screenAngle() {
+    const o = window.screen && window.screen.orientation;
+    return o && typeof o.angle === 'number' ? o.angle : window.orientation || 0;
+  }
+
+  function onOrientation(e) {
+    if (e.beta === null || e.gamma === null) return; // no sensor
+    const b = (e.beta * Math.PI) / 180, g = (e.gamma * Math.PI) / 180;
+    // Gravity in the phone's frame (x to its right edge, y to its top edge),
+    // then turned into the page's frame (y down) for landscape.
+    const px = Math.sin(g) * Math.cos(b), py = -Math.sin(b);
+    const turn = (screenAngle() * Math.PI) / 180, c = Math.cos(turn), s = Math.sin(turn);
+    const gx = px * c - py * s, gy = -(px * s + py * c);
+    let a = Math.atan2(gx, gy);
+    // Past sideways (the phone tipping upside down) ease back to straight
+    // down instead of flipping from one side to the other.
+    if (a > Math.PI / 2) a = Math.PI - a; else if (a < -Math.PI / 2) a = -Math.PI - a;
+    // Lying flat, gravity barely touches the screen and the angle is noise.
+    const flat = Math.min(1, Math.max(0, (Math.hypot(gx, gy) - 0.1) / 0.2));
+    tiltTarget = Math.max(-MAX_TILT, Math.min(MAX_TILT, a * flat));
+  }
+
+  function setTilt(on) {
+    tiltOn = on;
+    tiltTarget = 0;
+    tiltBtn.setAttribute('aria-pressed', String(on));
+    if (on) window.addEventListener('deviceorientation', onOrientation);
+    else window.removeEventListener('deviceorientation', onOrientation);
+  }
+
+  // Refused motion access: iOS won't ask again until Safari restarts.
+  function tiltBlocked() {
+    setTilt(false);
+    tiltBtn.disabled = true;
+  }
+
+  if (window.DeviceOrientationEvent && window.matchMedia('(pointer: coarse)').matches) {
+    tiltBtn.hidden = false;
+    tiltBtn.addEventListener('click', function () {
+      if (tiltOn) { setTilt(false); return; }
+      // iOS only hands out orientation after asking, and only from a tap.
+      if (typeof DeviceOrientationEvent.requestPermission !== 'function') { setTilt(true); return; }
+      DeviceOrientationEvent.requestPermission().then(function (state) {
+        if (state === 'granted') setTilt(true); else tiltBlocked();
+      }, tiltBlocked);
+    });
+  }
+
   // ---- Lost GPU context ---------------------------------------------------
   // Phones can drop the WebGL context (e.g. when the tab is in the
   // background). Fall back to the CSS stone until it comes back.
@@ -193,11 +248,24 @@
   let lastTx = NaN, lastTy = NaN, lastCount = 0, lastChunks = 0, lastDucks = 0;
 
   function step(sy, viewH, dw) {
+    tilt += ((tiltOn ? tiltTarget : 0) - tilt) * 0.12;
+    const down = sim.down;
+    down.x = Math.sin(tilt); down.y = Math.cos(tilt);
     if (raining) {
-      rainCarry += (dw / 1400) * 3.2;
+      // Rain falls along gravity. Slanted rain comes in through the top and
+      // through the side it slants away from, each in proportion to how
+      // square that edge is to the rain, so it stays as dense.
+      const fromTop = dw * down.y, fromSide = viewH * Math.abs(down.x);
+      rainCarry += ((fromTop + fromSide) / 1400) * 3.2;
       while (rainCarry >= 1) {
         rainCarry -= 1;
-        sim.add(Math.random() * dw, sy - 10 - Math.random() * 40, 0.4 + Math.random() * 0.3, 5 + Math.random() * 2);
+        const s = 5 + Math.random() * 2, drift = 0.4 + Math.random() * 0.3;
+        const vx = down.x * s + down.y * drift, vy = down.y * s - down.x * drift;
+        if (Math.random() * (fromTop + fromSide) < fromTop) {
+          sim.add(Math.random() * dw, sy - 10 - Math.random() * 40, vx, vy);
+        } else {
+          sim.add(down.x > 0 ? -5 - Math.random() * 30 : dw + 5 + Math.random() * 30, sy + Math.random() * viewH, vx, vy);
+        }
       }
     }
     const view = { left: -40, right: dw + 40, top: sy - 400, bottom: sy + viewH + 60 };
