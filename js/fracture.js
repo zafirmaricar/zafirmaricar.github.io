@@ -1,6 +1,7 @@
 // Rock fracturing. Clicking a rock cracks it open at that spot; a second hit on
-// the same spot breaks the chunk off. The chunk keeps the
-// text it covered (a clipped clone of the panel), falls as a rigid body,
+// the same spot breaks the chunk off. A TNT blast (see tnt.js) blows a far
+// bigger hole and throws the rock out as a few huge chunks. A chunk keeps the
+// text it covered (a clipped clone of the panel), flies as a rigid body,
 // collides with the other rocks and pushes water aside until it leaves the
 // page. Damage is stored per panel in panel-local pixels so it survives
 // relayouts and tab switches.
@@ -97,6 +98,7 @@
 
       let spot = null, best = MERGE_RADIUS;
       for (const sp of s.spots) {
+        if (sp.scar) continue; // cracks round a blast hole
         const d = Math.hypot(sp.x - lx, sp.y - ly);
         if (d < best) { best = d; spot = sp; }
       }
@@ -133,9 +135,9 @@
         shrunk[i] = px + (outline[i] - px) * 0.94;
         shrunk[i + 1] = py + (outline[i + 1] - py) * 0.94;
       }
-      const hull = Rocks.convexHull(rock.outer);
-      const pts = Rocks.clipToConvex(shrunk, hull);
-      if (pts.length < 6) return;
+      const piece = Rocks.carve(rock, px, py, shrunk, [], 0)[0];
+      if (!piece) return;
+      const pts = piece.pts;
       const poly = Rocks.makePoly(pts);
       if (!(poly.area > 200)) return;
 
@@ -148,6 +150,62 @@
       applyMask(el, s.holes);
 
       this.chunks.push(makeChunk(pts, poly, px, py, el, ghost));
+    }
+
+    // A bomb going off at (x, y). Every rock in reach loses everything inside
+    // a jagged outline about `radius` across: the rock next to the bomb turns
+    // to dust and the rest flies off as a few huge chunks.
+    blast(rocks, x, y, radius) {
+      const outline = blastOutline(x, y, radius);
+      const n = 5 + Math.floor(Math.random() * 3);
+      const turn = Math.random() * Math.PI * 2;
+      const cuts = [];
+      for (let k = 0; k < n; k++) cuts.push(turn + ((k + (Math.random() - 0.5) * 0.5) * Math.PI * 2) / n);
+      const core = radius * 0.15;
+
+      // Chunks already flying get thrown too.
+      const reach = radius * 1.6;
+      for (const c of this.chunks) {
+        const dx = c.x - x, dy = c.y - y, d = Math.hypot(dx, dy);
+        if (d >= reach || d < 1e-3) continue;
+        const k = (9 * (1 - d / reach)) / d;
+        c.vx += dx * k; c.vy += dy * k - 2; c.w += (Math.random() - 0.5) * 0.1;
+      }
+
+      let broke = false;
+      for (const rock of rocks) {
+        if (!rock.el || rock.maxX < x - radius * 1.2 || rock.minX > x + radius * 1.2 ||
+            rock.maxY < y - radius * 1.2 || rock.minY > y + radius * 1.2) continue;
+        const pieces = Rocks.carve(rock, x, y, outline, cuts, core);
+        if (!pieces.length) continue;
+        const el = rock.el, s = this.state(el);
+        // Clone the panel for the chunks before the new hole is masked out.
+        for (const p of pieces) {
+          const poly = Rocks.makePoly(p.pts);
+          if (!(poly.area > 150)) continue;
+          const ghost = this.makeGhost(el, rock.ox, rock.oy, p.pts, poly.cx, poly.cy);
+          const c = makeChunk(p.pts, poly, p.px, p.py, el, ghost);
+          const dx = poly.cx - x, dy = poly.cy - y, d = Math.hypot(dx, dy) || 1;
+          const sp = (6 + Math.random() * 4) * (1.2 - 0.5 * Math.min(1, d / radius));
+          c.vx = (dx / d) * sp + (Math.random() - 0.5) * 1.5;
+          c.vy = (dy / d) * sp - 2.5 - Math.random() * 2;
+          c.w = (Math.random() - 0.5) * 0.12;
+          this.chunks.push(c);
+        }
+        const local = new Float32Array(outline.length);
+        for (let i = 0; i < local.length; i += 2) { local[i] = outline[i] - rock.ox; local[i + 1] = outline[i + 1] - rock.oy; }
+        const lx = x - rock.ox, ly = y - rock.oy;
+        s.holes.push({ pts: local, cx: lx, cy: ly });
+        // Cracks that were inside the hole went with it; new ones run out
+        // from its rim.
+        const gone = Rocks.makePoly(local);
+        s.spots = s.spots.filter((sp) => sp.scar || !Rocks.pointInPoly(gone, sp.x, sp.y));
+        s.spots.push({ x: lx, y: ly, hits: 0, scar: true, cracks: rimCracks(lx, ly, local) });
+        s.rev = (s.rev || 0) + 1;
+        applyMask(el, s.holes);
+        broke = true;
+      }
+      if (broke) this.onDamage();
     }
 
     makeGhost(el, ox, oy, pts, cx, cy) {
@@ -284,6 +342,33 @@
     }
     pts.push(x1, y1);
     return pts;
+  }
+
+  // Jagged blast outline around (x, y), with its corners in angular order.
+  function blastOutline(x, y, radius) {
+    const k = 20 + Math.floor(Math.random() * 7);
+    const out = new Float32Array(2 * k);
+    for (let i = 0; i < k; i++) {
+      const a = ((i + (Math.random() - 0.5) * 0.6) / k) * Math.PI * 2;
+      const r = radius * (0.8 + Math.random() * 0.35);
+      out[2 * i] = x + Math.cos(a) * r;
+      out[2 * i + 1] = y + Math.sin(a) * r;
+    }
+    return out;
+  }
+
+  // Cracks running out from a blast hole's rim into the rock left behind.
+  function rimCracks(x, y, outline) {
+    const n = outline.length / 2;
+    const cracks = [];
+    for (let k = 0; k < 9; k++) {
+      const i = Math.floor(Math.random() * n);
+      const ox = outline[2 * i], oy = outline[2 * i + 1];
+      const d = Math.hypot(ox - x, oy - y) || 1;
+      const ext = 25 + Math.random() * 55;
+      cracks.push(jagged(ox, oy, ox + ((ox - x) / d) * ext, oy + ((oy - y) / d) * ext));
+    }
+    return cracks;
   }
 
   // A heavy first fracture: radial cracks out to the chunk outline, most of

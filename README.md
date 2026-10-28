@@ -5,12 +5,23 @@ Personal portfolio of Zafir Maricar. Plain HTML, CSS and JavaScript with no buil
 Rain falls over the page as a real-time 2D particle fluid. Every content panel
 is drawn as a rock and acts as a collider, so water pools on top of the panels
 and runs off their edges. Move the cursor through the water to push it, and
-click empty space to splash.
+click empty space to splash. The big rock at the top of Home (class `pond`)
+has a concave top instead of a dome: its corners rise into lips, so the rain
+collects there as a pond until it spills over the sides.
 
 Rocks can be broken. Clicking a rock cracks it open at that spot, and a second hit
 on the same spot breaks that chunk off. The chunk carries the
 text it covered, falls as a rigid body, bounces off the rocks below and pushes
 the water aside until it drops off the page. "Repair rocks" restores everything.
+
+The "TNT" switch next to it turns clicks on rock into bombs. A bundle of
+dynamite sticks where you click and its fuse burns for 3 seconds. Then it
+blows a hole about 280 px across (200 px on phones) in every rock it reaches.
+The rock next to the bomb turns to dust, and the rest is thrown out as five to
+seven huge chunks that carry their text. The blast also throws the water, the
+ducks and any falling chunks, and sets off any other bomb it reaches. Chunks are cut
+along rays from the centre (`Rocks.carve`), so a piece holds only solid rock:
+no air from the pond's basin or from earlier holes.
 
 Rubber ducks ride the rain: while there are fewer than three on the page, a
 new one drops in every 7 seconds. Each duck is a light rigid body. Probes
@@ -49,6 +60,7 @@ don't speed it up and 30 Hz screens don't slow it down.
 - `js/renderer.js`: WebGL rendering of the rocks (procedural stone, bevel lighting) and the fluid (screen-space metaballs)
 - `js/fracture.js`: cracks, broken-off chunks (rigid bodies with the panel text cloned and clipped) and per-panel damage
 - `js/ducks.js`: rubber ducks (rigid bodies with buoyancy probes) and their sprite
+- `js/tnt.js`: TNT bombs: planting, the burning fuse, chain reactions and the explosion effects
 - `js/media.js`: project media: clips that play only on screen, gallery thumbnails, and the YouTube poster that loads the player when tapped
 - `js/main.js`: tabs, rain, pointer input, phone tilt and the 60 fps main loop
 - `assets/docs/Zafir_Maricar_Resume.pdf`: the resume shown on the Resume tab, exported from the resume's Google Doc

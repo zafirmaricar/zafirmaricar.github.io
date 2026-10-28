@@ -156,6 +156,9 @@ li + li { margin-top: 0.35em; }
 }
 
 .hero { padding: 40px 44px; }
+/* The pond rock's lips rise up to 60px above its top (30px on phones);
+   keep them clear of the header rocks. */
+.hero.pond { margin-top: 40px; }
 .lede { font-size: 1.15rem; color: #dbe3ec; max-width: 40rem; }
 .hint { color: var(--muted); font-size: 0.95rem; max-width: 40rem; }
 
@@ -359,6 +362,88 @@ h1.rock.resume-title { font-size: 2rem; margin: 0; padding: 16px 28px; }
 }
 .rock.chunk { will-change: transform; }
 
+/* TNT: a planted bundle with a burning fuse (tnt.js), then the blast. */
+.tnt-armed .rock { cursor: crosshair; }
+.tnt {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+  transform-origin: 20px 37px;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.5));
+}
+.tnt.hot { animation: tnt-hot 0.16s ease-in-out infinite alternate; }
+@keyframes tnt-hot {
+  to { filter: drop-shadow(0 0 7px rgba(255, 96, 40, 0.95)) brightness(1.25); }
+}
+.tnt-flicker { animation: tnt-flicker 0.12s linear infinite alternate; }
+@keyframes tnt-flicker {
+  from { transform: scale(0.8) rotate(0deg); opacity: 0.85; }
+  to { transform: scale(1.15) rotate(25deg); opacity: 1; }
+}
+.boom { position: absolute; width: 0; height: 0; }
+.boom i { position: absolute; left: 0; top: 0; border-radius: 50%; }
+.boom-flash {
+  width: calc(var(--r) * 2.2);
+  height: calc(var(--r) * 2.2);
+  margin: calc(var(--r) * -1.1) 0 0 calc(var(--r) * -1.1);
+  background: radial-gradient(circle, #fffbe8 0%, #ffe07a 18%, rgba(255, 140, 40, 0.85) 40%, rgba(255, 80, 20, 0.35) 58%, rgba(255, 60, 0, 0) 70%);
+  animation: boom-flash 0.5s ease-out forwards;
+}
+@keyframes boom-flash {
+  0% { transform: scale(0.15); opacity: 1; }
+  45% { opacity: 0.95; }
+  100% { transform: scale(1.1); opacity: 0; }
+}
+.boom-ring {
+  width: calc(var(--r) * 2);
+  height: calc(var(--r) * 2);
+  margin: calc(var(--r) * -1) 0 0 calc(var(--r) * -1);
+  border: 3px solid rgba(255, 236, 200, 0.75);
+  animation: boom-ring 0.45s ease-out forwards;
+}
+@keyframes boom-ring {
+  from { transform: scale(0.2); opacity: 1; }
+  to { transform: scale(1.5); opacity: 0; border-width: 1px; }
+}
+.boom-ember {
+  width: 5px;
+  height: 5px;
+  margin: -2.5px 0 0 -2.5px;
+  background: #ffd36a;
+  box-shadow: 0 0 6px 2px rgba(255, 140, 40, 0.8);
+  animation: boom-ember 0.75s cubic-bezier(0.2, 0.7, 0.4, 1) forwards;
+}
+@keyframes boom-ember {
+  from { transform: translate(0, 0); opacity: 1; }
+  to { transform: translate(var(--dx), var(--dy)); opacity: 0; }
+}
+.boom-smoke {
+  width: var(--s);
+  height: var(--s);
+  margin: calc(var(--s) / -2) 0 0 calc(var(--s) / -2);
+  background: radial-gradient(circle, rgba(132, 126, 118, 0.8) 0%, rgba(96, 92, 86, 0.45) 45%, rgba(80, 78, 74, 0) 70%);
+  opacity: 0;
+  animation: boom-smoke 1.5s ease-out var(--t) forwards;
+}
+@keyframes boom-smoke {
+  0% { transform: translate(0, 0) scale(0.3); opacity: 0.95; }
+  100% { transform: translate(var(--dx), var(--dy)) scale(1.5); opacity: 0; }
+}
+/* The page jolts with each blast: text, stone and chunks together. */
+.shaking .wrap, .shaking #sim-layer, .shaking #chunks { animation: shake 0.42s ease-out; }
+@keyframes shake {
+  0%, 100% { transform: translate(0, 0); }
+  12% { transform: translate(-5px, 4px); }
+  28% { transform: translate(5px, -4px); }
+  44% { transform: translate(-3px, -2px); }
+  62% { transform: translate(2px, 2px); }
+  80% { transform: translate(-1px, 1px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .shaking .wrap, .shaking #sim-layer, .shaking #chunks { animation: none; }
+}
+
 .hud {
   position: fixed;
   right: 16px;
@@ -387,6 +472,8 @@ h1.rock.resume-title { font-size: 2rem; margin: 0; padding: 16px 28px; }
 }
 .hud button:hover { background: rgba(255, 255, 255, 0.16); }
 .hud #tilt[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.hud #tnt[aria-pressed="true"] { background: #e2412b; border-color: #ff6a4f; color: #fff; }
+.hud #tnt[aria-pressed="true"]:hover { background: #f05a42; }
 .hud button:disabled { opacity: 0.5; text-decoration: line-through; cursor: default; }
 
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
@@ -401,6 +488,8 @@ h1.rock.resume-title { font-size: 2rem; margin: 0; padding: 16px 28px; }
   .wrap { padding: 0 26px; }
   .rock { padding: 22px 20px; }
   .hero { padding: 28px 22px; }
+  .hero.pond { margin-top: 24px; }
+  .hud button { padding: 4px 10px; }
   .site-header { margin-top: 28px; }
   .grid-2 { grid-template-columns: 1fr; }
   .skills { flex-direction: column; }

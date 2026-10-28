@@ -78,6 +78,20 @@
       }
     }
 
+    // Throws the water within r of (x, y) outwards and a little up: `speed`
+    // at the centre, fading to nothing at r.
+    blast(x, y, r, speed) {
+      const r2 = r * r;
+      for (let i = 0; i < this.count; i++) {
+        const dx = this.x[i] - x, dy = this.y[i] - y, d2 = dx * dx + dy * dy;
+        if (d2 >= r2) continue;
+        const d = Math.sqrt(d2) || 1, k = speed * (1 - d / r);
+        this.vx[i] += (dx / d) * k;
+        this.vy[i] += (dy / d) * k - k * 0.3;
+        this.still[i] = 0;
+      }
+    }
+
     remove(i) {
       const last = --this.count;
       if (i === last) return;

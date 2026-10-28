@@ -70,6 +70,18 @@
   const ducks = new window.Ducks({ size: small ? 42 : 56 });
   window.portfolioDucks = ducks;
 
+  const tnt = new window.Tnt({
+    layer: chunkLayer,
+    rocks: function () { return rocks; },
+    radius: small ? 100 : 140,
+    onBlast: function (x, y, r) {
+      fracture.blast(rocks, x, y, r);
+      sim.blast(x, y, r * 1.8, 12);
+      ducks.blast(x, y, r * 2, 10);
+    },
+  });
+  window.portfolioTnt = tnt;
+
   function docWidth() { return document.documentElement.clientWidth; }
   function docHeight() { return document.documentElement.scrollHeight; }
 
@@ -82,10 +94,11 @@
       if (!el.getClientRects().length) return; // hidden page
       const r = el.getBoundingClientRect();
       const seed = window.Rocks.hashString(el.textContent.slice(0, 60)) + i;
-      const rock = window.Rocks.makeRock(r.left + sx, r.top + sy, r.width, r.height, seed);
+      const rock = window.Rocks.makeRock(r.left + sx, r.top + sy, r.width, r.height, seed, { pond: el.classList.contains('pond') });
       fracture.decorate(rock, el, r.left + sx, r.top + sy);
       rocks.push(rock);
     });
+    tnt.layout(rocks);
     sim.setRocks(rocks);
     sim.removeInsideRocks();
     ducks.removeInsideRocks(rocks);
@@ -102,7 +115,7 @@
     rebuildTimer = setTimeout(buildRocks, 60);
   };
   // Rebuild at once so the old tab's rocks are never drawn over the new one.
-  onPageChange = function () { fracture.clearChunks(); buildRocks(); };
+  onPageChange = function () { fracture.clearChunks(); tnt.clear(); buildRocks(); };
   buildRocks();
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(onLayoutChange);
   window.addEventListener('load', onLayoutChange);
@@ -147,14 +160,17 @@
     if (rocks.some(function (r) { return window.Rocks.solidAt(r, x, y); })) e.preventDefault();
   });
 
-  // Click a duck to make it hop, a rock to crack it, open space to splash.
+  // Click a duck to make it hop, a rock to crack it (or, with TNT on, to
+  // plant a bomb), open space to splash.
+  let tntOn = false;
   root.addEventListener('click', function (e) {
     if (e.button !== 0 || glLost) return;
     if (e.target.closest('a, button, input, iframe, object, .hud')) return;
     const sel = window.getSelection();
     if (sel && !sel.isCollapsed) return; // the user was selecting text
     const x = e.clientX + window.scrollX, y = e.clientY + window.scrollY;
-    if (!ducks.hit(x, y) && !fracture.hit(rocks, x, y)) sim.splash(x, y, 45);
+    if (ducks.hit(x, y)) return;
+    if (!(tntOn ? tnt.place(rocks, x, y) : fracture.hit(rocks, x, y))) sim.splash(x, y, 45);
   });
 
   // ---- HUD ----------------------------------------------------------------
@@ -165,7 +181,13 @@
   }
   rainBtn.addEventListener('click', function () { raining = !raining; syncRainButton(); });
   syncRainButton();
-  document.getElementById('repair').addEventListener('click', function () { fracture.repair(); });
+  document.getElementById('repair').addEventListener('click', function () { tnt.clear(); fracture.repair(); });
+  const tntBtn = document.getElementById('tnt');
+  tntBtn.addEventListener('click', function () {
+    tntOn = !tntOn;
+    tntBtn.setAttribute('aria-pressed', String(tntOn));
+    root.classList.toggle('tnt-armed', tntOn);
+  });
 
   // ---- Tilt ---------------------------------------------------------------
   // Phones only: gravity for the water and the ducks points at the real
@@ -258,6 +280,7 @@
     e.preventDefault();
     glLost = true;
     fracture.clearChunks();
+    tnt.clear();
     document.body.classList.remove('sim-on');
   });
   canvas.addEventListener('webglcontextrestored', function () {
@@ -297,6 +320,7 @@
       }
     }
     const view = { left: -40, right: dw + 40, top: sy - 400, bottom: sy + viewH + 60 };
+    tnt.step();
     const moving = fracture.step(rocks, docHeight());
     if (raining) ducks.countdown(rocks, dw, sy, viewH);
     const floating = ducks.step(rocks, moving, sim, view);

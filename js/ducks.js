@@ -433,6 +433,18 @@
       return false;
     }
 
+    // A blast at (x, y) throws the ducks within r away from it, spinning.
+    blast(x, y, r, speed) {
+      for (const d of this.list) {
+        const dx = d.x - x, dy = d.y - y, dist = Math.hypot(dx, dy);
+        if (dist >= r) continue;
+        const k = speed * (1 - dist / r);
+        d.vx += (dx / (dist || 1)) * k;
+        d.vy += (dy / (dist || 1)) * k - k * 0.4;
+        d.w += (Math.random() - 0.5) * 0.4;
+      }
+    }
+
     // Drop ducks that a layout change left inside a rock.
     removeInsideRocks(rocks) {
       for (let k = this.list.length - 1; k >= 0; k--) {
