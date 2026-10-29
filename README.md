@@ -6,8 +6,12 @@ Rain falls over the page as a real-time 2D particle fluid. Every content panel
 is drawn as a rock and acts as a collider, so water pools on top of the panels
 and runs off their edges. Move the cursor through the water to push it, and
 click empty space to splash. The big rock at the top of Home (class `pond`)
-has a concave top instead of a dome: its corners rise into lips, so the rain
-collects there as a pond until it spills over the sides.
+has two ponds on top instead of a dome. A shallow basin over the title ends
+in a ridge, then the top drops to a second, lower pond right of the title,
+with a lip at the right edge, so the rain collects in one and spills into the
+other. `main.js` places the drop from the text: right of every line above the
+pond and just above the first line it would cut into (on narrow phones it
+keeps a single pond when there's no room).
 
 Rocks can be broken. Clicking a rock cracks it open at that spot, and a second hit
 on the same spot breaks that chunk off. The chunk is sized to the rock where

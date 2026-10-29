@@ -87,6 +87,35 @@
 
   let needsRender = true;
 
+  // Where a pond rock's top steps down into its lower pond: right of the
+  // text, and as deep as it can go without reaching any of it, so it stops
+  // above the first line it would cut into. A step too narrow, too deep for
+  // its width or crowding the upper pond is skipped; with none left the
+  // rock keeps a single pond. r is the rock's rect.
+  const range = document.createRange();
+  function pondStep(el, r) {
+    const lines = [];
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    for (let t = walker.nextNode(); t; t = walker.nextNode()) {
+      if (!t.nodeValue.trim()) continue;
+      range.selectNodeContents(t);
+      const rects = range.getClientRects();
+      for (let i = 0; i < rects.length; i++) lines.push({ top: rects[i].top - r.top, right: rects[i].right - r.left });
+    }
+    lines.sort(function (a, b) { return a.top - b.top; });
+    let best = {}, right = 0;
+    for (let k = 1; k <= lines.length; k++) {
+      right = Math.max(right, lines[k - 1].right);
+      const step = right + 16;
+      const depth = (k < lines.length ? lines[k].top : r.height) - 10;
+      const width = r.width - step;
+      if (step < r.width * 0.4 || width < Math.max(64, r.width * 0.2)) continue;
+      if (depth < 50 || depth > width * 1.2 || depth > r.height * 0.6) continue;
+      best = { step: step, depth: depth };
+    }
+    return best;
+  }
+
   function buildRocks() {
     const sx = window.scrollX, sy = window.scrollY;
     rocks = [];
@@ -94,7 +123,8 @@
       if (!el.getClientRects().length) return; // hidden page
       const r = el.getBoundingClientRect();
       const seed = window.Rocks.hashString(el.textContent.slice(0, 60)) + i;
-      const rock = window.Rocks.makeRock(r.left + sx, r.top + sy, r.width, r.height, seed, { pond: el.classList.contains('pond') });
+      const pond = el.classList.contains('pond') ? pondStep(el, r) : null;
+      const rock = window.Rocks.makeRock(r.left + sx, r.top + sy, r.width, r.height, seed, { pond: pond });
       fracture.decorate(rock, el, r.left + sx, r.top + sy);
       rocks.push(rock);
     });

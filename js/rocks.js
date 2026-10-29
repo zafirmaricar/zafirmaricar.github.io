@@ -96,18 +96,31 @@
 
   // opts.pond: instead of the dome, the top dips into a basin between lips
   // raised at the corners, so rain pools there like a pond until it spills
-  // over the sides.
+  // over the sides. With pond.step (px from the left edge) the top drops at
+  // that point by pond.depth into a second, lower pond: the upper pond's
+  // right lip becomes a ridge, a wall falls from it to the lower pond's
+  // floor, and that floor rises into its own lip at the right edge.
   const LIP_POW = 2.5; // basin profile |u|^p: flat in the middle, steeper near the lips
+  const LIP_POW2 = 4;  // the lower pond's floor stays flat for longer before its lip
   function makeRock(x, y, w, h, seed, opts) {
     const rng = mulberry32(seed);
-    const pond = opts && opts.pond ? Math.max(30, Math.min(60, w * 0.08)) : 0;
+    const pond = opts && opts.pond;
     const r = Math.max(4, Math.min(22, w / 4, h / 4));
+    const stepped = !!pond && pond.step > 0 && pond.step < w;
+    const step = stepped ? pond.step : w;
+    const depth = stepped ? pond.depth : 0;
+    const lip = !pond ? 0 : stepped ? Math.max(20, Math.min(34, step * 0.07)) : Math.max(30, Math.min(60, w * 0.08));
+    const lip2 = stepped ? Math.min(50, (w - step) * 0.18, depth * 0.5) : 0;
     const pts = []; // [x, y, nx, ny]
 
-    function arc(cx, cy, a0) {
-      for (let s = 0; s <= 4; s++) {
-        const a = a0 + (s * Math.PI) / 8;
-        pts.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r, Math.cos(a), Math.sin(a)]);
+    // Quarter circle from angle a0, clockwise on screen. A concave corner
+    // (the foot of the wall) turns the other way, with the normals pointing
+    // back at its centre.
+    function arc(cx, cy, a0, rad, concave) {
+      const k = Math.max(4, Math.ceil(rad / 8)), dir = concave ? -1 : 1;
+      for (let s = 0; s <= k; s++) {
+        const a = a0 + (dir * s * Math.PI) / (2 * k);
+        pts.push([cx + Math.cos(a) * rad, cy + Math.sin(a) * rad, dir * Math.cos(a), dir * Math.sin(a)]);
       }
     }
     function line(x0, y0, x1, y1, nx, ny) {
@@ -118,14 +131,26 @@
       }
     }
     // Clockwise on screen (y points down).
-    arc(x + w - r, y + r, -Math.PI / 2);
-    line(x + w, y + r, x + w, y + h - r, 1, 0);
-    arc(x + w - r, y + h - r, 0);
+    const y2 = y + depth; // top of the rock right of the step
+    arc(x + w - r, y2 + r, -Math.PI / 2, r);
+    line(x + w, y2 + r, x + w, y + h - r, 1, 0);
+    arc(x + w - r, y + h - r, 0, r);
     line(x + w - r, y + h, x + r, y + h, 0, 1);
-    arc(x + r, y + h - r, Math.PI / 2);
+    arc(x + r, y + h - r, Math.PI / 2, r);
     line(x, y + h - r, x, y + r, -1, 0);
-    arc(x + r, y + r, Math.PI);
-    line(x + r, y, x + w - r, y, 0, -1);
+    arc(x + r, y + r, Math.PI, r);
+    if (stepped) {
+      // The foot of the wall is a wide curve, so the rim, pushed out towards
+      // its centre, doesn't fold over itself there.
+      const foot = Math.max(8, Math.min(48, depth - r, (w - step - r) / 2));
+      line(x + r, y, x + step - r, y, 0, -1);
+      arc(x + step - r, y + r, -Math.PI / 2, r);
+      line(x + step, y + r, x + step, y2 - foot, 1, 0);
+      arc(x + step + foot, y2 - foot, Math.PI, foot, true);
+      line(x + step + foot, y2, x + w - r, y2, 0, -1);
+    } else {
+      line(x + r, y, x + w - r, y, 0, -1);
+    }
 
     const n = pts.length;
     // Smaller rocks get thinner rims so the stone stays close to the content.
@@ -142,20 +167,29 @@
     const normals = new Float32Array(2 * n);
     for (let i = 0; i < n; i++) {
       const [px, py, nx, ny] = pts[i];
-      const u = (px - cx) / (w / 2);
       inner[2 * i] = px; inner[2 * i + 1] = py;
       if (pond && ny < 0) {
         // The lips rise straight up, so the corners don't spread sideways.
         // The lighting follows the basin's slope: each lip's inner face
-        // looks towards the middle.
-        const a = Math.min(1, Math.abs(u));
-        const lift = pond * Math.pow(a, LIP_POW) * -ny;
-        const slope = (Math.sign(u) * pond * LIP_POW * Math.pow(a, LIP_POW - 1) * 2) / w;
+        // looks towards the middle. Right of the step, only the far end
+        // rises (the wall is the lower pond's other side), and its corner
+        // lifts whole, so the lip is round on top with a sheer outer face.
+        let lift, slope, upper = px <= x + step;
+        if (upper) {
+          const half = step / 2, u = (px - x - half) / half, a = Math.min(1, Math.abs(u));
+          lift = lip * Math.pow(a, LIP_POW);
+          slope = (Math.sign(u) * lip * LIP_POW * Math.pow(a, LIP_POW - 1)) / half;
+        } else {
+          const span = w - step - r, t = Math.min(1, (px - x - step) / span);
+          lift = lip2 * Math.pow(t, LIP_POW2);
+          slope = t < 1 ? (lip2 * LIP_POW2 * Math.pow(t, LIP_POW2 - 1)) / span : 0;
+        }
         const mx = nx + ny * slope, len = Math.hypot(mx, ny);
         normals[2 * i] = mx / len; normals[2 * i + 1] = ny / len;
-        outer[2 * i] = px + nx * off[i]; outer[2 * i + 1] = py + ny * off[i] - lift;
+        outer[2 * i] = px + nx * off[i]; outer[2 * i + 1] = py + ny * off[i] - (upper ? lift * -ny : lift);
         continue;
       }
+      const u = (px - cx) / (w / 2);
       const o = off[i] + (ny < 0 ? dome * Math.max(0, 1 - u * u) * -ny : 0);
       normals[2 * i] = nx; normals[2 * i + 1] = ny;
       outer[2 * i] = px + nx * o; outer[2 * i + 1] = py + ny * o;
@@ -164,7 +198,10 @@
     const rock = makePoly(outer);
     rock.inner = inner;
     rock.normals = normals;
-    rock.cx = cx; rock.cy = y + h / 2; // fan centre for rendering
+    // Fan centre for rendering. Under the upper pond and below the step, it
+    // sees the whole inner outline even when the top steps down.
+    rock.cx = Math.min(cx, x + step / 2);
+    rock.cy = y + (h + depth) / 2;
     return rock;
   }
 

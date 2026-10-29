@@ -489,6 +489,9 @@ h1.rock.resume-title { font-size: 2rem; margin: 0; padding: 16px 28px; }
   .rock { padding: 22px 20px; }
   .hero { padding: 28px 22px; }
   .hero.pond { margin-top: 24px; }
+  /* Break the eyebrow after "Real-Time" at every phone width, so the top
+     right of the hero stays clear for its lower pond. */
+  .hero .eyebrow { max-width: 18em; }
   .hud button { padding: 4px 10px; }
   .site-header { margin-top: 28px; }
   .grid-2 { grid-template-columns: 1fr; }
