@@ -57,7 +57,8 @@ Site. The GIFs are converted to short looping videos (H.264 MP4 with a VP9
 WebM fallback), which load and play only while on screen. Projects with
 several items get a small gallery like the old site's carousels. Media can be
 cracked and broken off like the rest of the rock; the cracks are drawn over it
-too.
+too. A featured card across the top links to the Pixel Nuclear Reactor
+(below).
 
 The simulation runs at a fixed 60 steps per second, so high-refresh screens
 don't speed it up and 30 Hz screens don't slow it down.
@@ -83,8 +84,70 @@ don't speed it up and 30 Hz screens don't slow it down.
 - `assets/img/resume.webp`: an image of the resume's first page (the PDF at 144 dpi, 1224×1584 for US Letter), shown instead of the PDF viewer on phones and in browsers without one. `update_resume` re-renders it.
 - `update_resume`: replaces the resume with a new PDF and pushes it (see below); `update_resume.cmd` runs it from cmd or PowerShell
 - `.github/workflows/resume-image.yml`: renders `resume.webp` on GitHub when a PDF is pushed without it
+- `reactor/`: the Pixel Nuclear Reactor page (see below)
 
 Any element with the class `rock` becomes a collider automatically.
+
+## Pixel Nuclear Reactor
+
+`reactor/` is a page of its own, linked from the featured card on the
+Projects tab: a pixel-art cross section of a small modular reactor plant at
+night, running on a real-time model of the whole plant. Pull the rods, trip
+the pumps, cut the grid and watch the town's lights. It's sized like NuScale's
+module (250 MW of heat, 77 MW of electricity, 138 bar) but laid out as a loop
+like a classic PWR so every part shows.
+
+- The reactor is point kinetics with six delayed-neutron groups. Reactivity
+  comes from the rods, the boron, the fuel temperature (Doppler), the
+  moderator temperature and voids, and the decay heat after a shutdown is six
+  groups fitted to 6.4% of power.
+- Heat flows from the fuel to the primary water, round the loop (core, hot
+  leg, steam generator, cold leg, pump, with a pressurizer) and into the
+  steam that drives the turbine. With the pump off, the water keeps moving by
+  natural circulation.
+- With no power at all, the passive cooling loop carries the decay heat into
+  the pool around the containment. The pool takes about two days to reach
+  boiling, then boils off slowly: about an eighth of it in a week.
+- The protection system trips the reactor on high power (110%), a short
+  period at low power, high or low primary pressure, a high hot-leg
+  temperature, low flow, a low steam generator level or a turbine trip.
+  Rods on automatic hold the coolant temperature as the grid's load changes.
+- Six scenarios: full power, a cold start, a turbine trip, a pump failure, a
+  station blackout and a sandbox with the protection off. Damaging the core
+  there brings up a calm screen that names the trip that would have saved it.
+- The simulation steps at a fixed 60 Hz and can run ×10 and ×60, or ×3600
+  once the reactor is shut down and quiet, to watch a blackout over days.
+
+Files:
+
+- `reactor/index.html`: the page: the plant, the control desk (Reactor,
+  Plant, Grid and Alarms tabs), trends and "How it works"
+- `reactor/css/reactor.css`: its styles
+- `reactor/js/sim.js`: the plant model and the protection system
+- `reactor/js/scenarios.js`: the scenarios and their briefings
+- `reactor/js/art.js`: the pixel art, all drawn in code (palette, parts,
+  pipes and the static background) into a 480 × 270 buffer
+- `reactor/js/render.js`: draws each frame from the model: coolant colours,
+  rods, the core's glow, machines, steam, the plume and the town's lights
+- `reactor/js/audio.js`: Geiger clicks, pump hum, turbine whine and the
+  klaxon, synthesised with Web Audio
+- `reactor/js/trend.js`: the trend charts
+- `reactor/js/ui.js`: the control desk, readouts, alarms, event log,
+  scenario picker, labels and inspect cards
+- `reactor/js/app.js`: the 60 Hz loop, speeds, pixel scaling and pointer input
+- `reactor/test/`: tests for the model and the renderer, which need no browser:
+  `node --test reactor/test/*.test.js`
+- `reactor/tools/`: makes the Projects clip and the link preview picture
+  (`reactor/share.png`)
+
+The clip (a SCRAM at full power) is recorded from the simulation itself, at
+2× in whole pixels:
+
+    node reactor/tools/clip.js | ffmpeg -f rawvideo -pix_fmt rgba -s 480x270 -r 30 -i - -an -vf scale=960:540:flags=neighbor,setsar=1,format=yuv420p -c:v libx264 -preset veryslow -crf 28 -profile:v high -movflags +faststart assets/img/projects/pixel-reactor-1.mp4
+    node reactor/tools/clip.js | ffmpeg -f rawvideo -pix_fmt rgba -s 480x270 -r 30 -i - -an -vf scale=960:540:flags=neighbor,setsar=1,format=yuv420p -c:v libvpx-vp9 -crf 38 -b:v 0 -row-mt 1 -deadline good -cpu-used 1 assets/img/projects/pixel-reactor-1.webm
+    node reactor/tools/clip.js --poster | ffmpeg -f rawvideo -pix_fmt rgba -s 480x270 -i - -vf scale=960:540:flags=neighbor -c:v libwebp -lossless 1 -compression_level 6 assets/img/projects/pixel-reactor-1.webp
+
+`node reactor/tools/share.js` redraws `reactor/share.png`; it needs Playwright.
 
 ## Updating the resume
 

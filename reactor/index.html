@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Pixel Nuclear Reactor · Zafir Maricar</title>
+  <meta name="description" content="Run a small modular nuclear reactor in your browser: a pixel-art cross section of the whole plant on a real-time simulation with point kinetics, temperature feedback, decay heat, passive cooling and a protection system.">
+  <meta name="theme-color" content="#0b1320">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Pixel Nuclear Reactor">
+  <meta property="og:description" content="Pull the rods, trip the pumps and keep the town's lights on: a small modular reactor simulated in your browser by Zafir Maricar.">
+  <meta property="og:url" content="https://zafirmaricar.github.io/reactor/">
+  <meta property="og:image" content="https://zafirmaricar.github.io/reactor/share.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Pixel-art cross section of a small modular reactor plant at night: the glowing core, steam generator, turbine hall, cooling tower and a lit-up town.">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/reactor.css">
+</head>
+<body>
+  <header class="bar">
+    <a class="back" href="../#projects"><span aria-hidden="true">&larr;</span> Projects</a>
+    <h1 class="title">Pixel Nuclear Reactor</h1>
+    <div class="tools">
+      <button type="button" class="tool" id="btn-scenarios" aria-haspopup="dialog">Scenarios</button>
+      <div class="speed" role="group" aria-label="Simulation speed">
+        <button type="button" class="tool" data-speed="0" aria-pressed="false" aria-label="Pause" title="Pause (space)"><span aria-hidden="true">II</span></button>
+        <button type="button" class="tool" data-speed="1" aria-pressed="true">&times;1</button>
+        <button type="button" class="tool" data-speed="10" aria-pressed="false">&times;10</button>
+        <button type="button" class="tool" data-speed="60" aria-pressed="false">&times;60</button>
+        <button type="button" class="tool" data-speed="3600" aria-pressed="false" disabled title="Unlocks once the reactor is tripped and shut down">&times;3600</button>
+      </div>
+      <button type="button" class="tool" id="btn-labels" aria-pressed="true">Labels</button>
+      <button type="button" class="tool" id="btn-neutrons" aria-pressed="false" title="Show neutrons flying in the core">Neutrons</button>
+      <button type="button" class="tool" id="btn-sound" aria-pressed="true">Sound</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="stage" aria-label="The plant">
+      <div class="scene-box" id="scene-box">
+        <div class="scene" id="scene">
+          <canvas id="plant" width="480" height="270" role="img" aria-label="Cross section of the plant"></canvas>
+          <div class="labels" id="labels" aria-hidden="true"></div>
+          <div class="clock" id="clock" aria-hidden="true">00:00:00</div>
+          <div class="brief" id="brief" role="status" hidden></div>
+          <div class="card" id="card" role="dialog" aria-labelledby="card-title" hidden></div>
+          <div class="damage" id="damage" role="alertdialog" aria-labelledby="damage-title" aria-describedby="damage-text" hidden>
+            <div class="damage-box">
+              <p class="eyebrow">Sandbox over</p>
+              <h2 id="damage-title">Core damage</h2>
+              <p id="damage-text"></p>
+              <p class="damage-note">Nothing real happened. In a real plant the protection system can't be switched off, which is the point.</p>
+              <div class="damage-actions">
+                <button type="button" class="btn primary" id="damage-retry">Try again</button>
+                <button type="button" class="btn" id="damage-inspect">Inspect the plant</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="strip" id="strip">
+        <div class="strip-item"><span class="k">Power</span><span class="v" id="s-power">100%</span></div>
+        <div class="strip-item"><span class="k">Output</span><span class="v" id="s-mwe">77 MWe</span></div>
+        <button type="button" class="strip-item strip-alarms" id="s-alarms" aria-label="Alarms"><span class="k">Alarms</span><span class="v" id="s-alarm-count">0</span></button>
+        <button type="button" class="drawer-handle" id="drawer-handle" aria-expanded="false" aria-controls="desk">Controls</button>
+        <div class="scram" id="scram">
+          <button type="button" class="scram-cover" id="scram-cover" aria-expanded="false" aria-controls="scram-btn"><span>Lift cover</span></button>
+          <button type="button" class="scram-btn" id="scram-btn" tabindex="-1" aria-describedby="scram-help">SCRAM</button>
+          <span class="sr-only" id="scram-help">Drops every rod into the core. Lift the cover first.</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="desk" id="desk" aria-label="Control desk">
+      <div class="tabs" role="tablist" aria-label="Desk sections">
+        <button type="button" role="tab" id="tab-reactor" aria-controls="panel-reactor" aria-selected="true">Reactor</button>
+        <button type="button" role="tab" id="tab-plant" aria-controls="panel-plant" aria-selected="false" tabindex="-1">Plant</button>
+        <button type="button" role="tab" id="tab-grid" aria-controls="panel-grid" aria-selected="false" tabindex="-1">Grid</button>
+        <button type="button" role="tab" id="tab-alarms" aria-controls="panel-alarms" aria-selected="false" tabindex="-1">Alarms</button>
+      </div>
+
+      <div class="panel" role="tabpanel" id="panel-reactor" aria-labelledby="tab-reactor">
+        <div class="ctl">
+          <div class="ctl-head"><label for="c-rods">Control rods</label><output id="o-rods" for="c-rods">80% out</output></div>
+          <input type="range" id="c-rods" min="0" max="100" step="0.5" value="80">
+          <div class="ctl-row">
+            <label class="switch"><input type="checkbox" id="c-rod-auto" checked><span>Auto</span></label>
+            <span class="hint" id="h-rods">Holding coolant at 307 °C</span>
+          </div>
+        </div>
+        <div class="ctl">
+          <div class="ctl-head"><span class="ctl-name">Shutdown rods</span><output id="o-sd">Out</output></div>
+          <div class="ctl-row">
+            <label class="switch"><input type="checkbox" id="c-sd" checked><span>Withdrawn</span></label>
+            <span class="hint">Out before the control rods can lift</span>
+          </div>
+        </div>
+        <div class="ctl">
+          <div class="ctl-head"><label for="c-boron">Boron in the water</label><output id="o-boron" for="c-boron">600 ppm</output></div>
+          <input type="range" id="c-boron" min="0" max="1500" step="10" value="600">
+          <div class="ctl-row"><span class="hint">Mixes in over about 30 s. More boron, less power.</span></div>
+        </div>
+        <div class="ctl ctl-protect">
+          <div class="ctl-head"><span class="ctl-name">Protection system</span><output id="o-protect">On</output></div>
+          <div class="ctl-row">
+            <label class="switch"><input type="checkbox" id="c-protect" checked><span>Trips armed</span></label>
+            <button type="button" class="btn small" id="btn-reset-trip" disabled>Reset trip</button>
+          </div>
+        </div>
+        <div class="ro-grid">
+          <div class="ro wide">
+            <span class="ro-k">Fission power</span>
+            <span class="ro-v" id="r-flux">100%</span>
+            <div class="logmeter" id="logmeter" aria-hidden="true"><div class="logmeter-fill" id="logmeter-fill"></div></div>
+            <div class="logmeter-scale" aria-hidden="true"><span>10<sup>-8</sup></span><span>10<sup>-6</sup></span><span>10<sup>-4</sup></span><span>1%</span><span>100%</span></div>
+          </div>
+          <div class="ro"><span class="ro-k">Heat</span><span class="ro-v" id="r-heat">250 MW</span></div>
+          <div class="ro"><span class="ro-k">Reactivity</span><span class="ro-v" id="r-rho">0 pcm</span><span class="badge" id="r-crit">Critical</span></div>
+          <div class="ro"><span class="ro-k">Period</span><span class="ro-v" id="r-period">&infin;</span></div>
+          <div class="ro"><span class="ro-k">Fuel</span><span class="ro-v" id="r-fuel">700 °C</span><span class="ro-sub" id="r-fuel-sub">Centre 1600 °C</span></div>
+        </div>
+      </div>
+
+      <div class="panel" role="tabpanel" id="panel-plant" aria-labelledby="tab-plant" hidden>
+        <div class="ctl">
+          <div class="ctl-head"><label for="c-pump">Primary pump</label><output id="o-pump" for="c-pump">100%</output></div>
+          <input type="range" id="c-pump" min="0" max="100" step="1" value="100">
+          <div class="ctl-row">
+            <label class="switch"><input type="checkbox" id="c-pump-on" checked><span>Running</span></label>
+            <span class="hint" id="h-pump">Flow 100%</span>
+          </div>
+        </div>
+        <div class="ctl">
+          <div class="ctl-head"><span class="ctl-name">Pressurizer</span><output id="o-pzr">138 bar</output></div>
+          <div class="ctl-row">
+            <label class="switch"><input type="checkbox" id="c-pzr-auto" checked><span>Auto</span></label>
+            <button type="button" class="btn small toggle" id="c-heaters" aria-pressed="false" disabled>Heaters</button>
+            <button type="button" class="btn small toggle" id="c-spray" aria-pressed="false" disabled>Spray</button>
+            <button type="button" class="btn small toggle" id="c-porv" aria-pressed="false">Relief valve</button>
+          </div>
+        </div>
+        <div class="ctl">
+          <div class="ctl-head"><label for="c-feed">Feedwater</label><output id="o-feed" for="c-feed">100%</output></div>
+          <input type="range" id="c-feed" min="0" max="120" step="1" value="100" disabled>
+          <div class="ctl-row">
+            <label class="switch"><input type="checkbox" id="c-feed-auto" checked><span>Auto</span></label>
+            <label class="switch"><input type="checkbox" id="c-feed-on" checked><span>Pump running</span></label>
+          </div>
+        </div>
+        <div class="ro-grid">
+          <div class="ro"><span class="ro-k">Hot leg</span><span class="ro-v" id="r-thot">322 °C</span></div>
+          <div class="ro"><span class="ro-k">Cold leg</span><span class="ro-v" id="r-tcold">291 °C</span></div>
+          <div class="ro"><span class="ro-k">Average</span><span class="ro-v" id="r-tavg">307 °C</span><span class="ro-sub" id="r-tref">Target 307 °C</span></div>
+          <div class="ro"><span class="ro-k">Pressure</span><span class="ro-v" id="r-press">138 bar</span><span class="ro-sub" id="r-pzr-level">Pressurizer 55%</span></div>
+          <div class="ro"><span class="ro-k">Flow</span><span class="ro-v" id="r-flow">100%</span></div>
+          <div class="ro"><span class="ro-k">Boiling margin</span><span class="ro-v" id="r-dnb">2.0</span><span class="ro-sub">DNB ratio, trouble under 1</span></div>
+          <div class="ro"><span class="ro-k">Steam generator</span><span class="ro-v" id="r-sg">50%</span><span class="ro-sub" id="r-steam">60 bar</span></div>
+          <div class="ro"><span class="ro-k">Cooling pool</span><span class="ro-v" id="r-pool">40 °C</span><span class="ro-sub" id="r-pool-sub">1000 t of water</span></div>
+        </div>
+      </div>
+
+      <div class="panel" role="tabpanel" id="panel-grid" aria-labelledby="tab-grid" hidden>
+        <div class="ctl">
+          <div class="ctl-head"><label for="c-load">Turbine load</label><output id="o-load" for="c-load">77 MWe</output></div>
+          <input type="range" id="c-load" min="0" max="77" step="1" value="77">
+          <div class="ctl-row">
+            <button type="button" class="btn small" id="btn-trip-turbine">Trip turbine</button>
+            <button type="button" class="btn small" id="btn-reset-turbine" disabled>Reset turbine</button>
+            <span class="hint" id="h-turbine">On line</span>
+          </div>
+        </div>
+        <div class="ctl">
+          <div class="ctl-head"><label for="c-cooling">Cooling water</label><output id="o-cooling" for="c-cooling">100%</output></div>
+          <input type="range" id="c-cooling" min="0" max="100" step="1" value="100">
+          <div class="ctl-row"><span class="hint">Less cooling, less vacuum, less output, then a turbine trip</span></div>
+        </div>
+        <div class="ctl">
+          <div class="ctl-head"><span class="ctl-name">Off-site power</span><output id="o-grid">Connected</output></div>
+          <div class="ctl-row">
+            <label class="switch"><input type="checkbox" id="c-grid" checked><span>Grid connected</span></label>
+            <span class="hint">Lose it and the pumps stop</span>
+          </div>
+        </div>
+        <div class="ro-grid">
+          <div class="ro wide"><span class="ro-k">Electricity</span><span class="ro-v" id="r-mwe">77.0 MWe</span><span class="ro-sub" id="r-demand">Town needs 77 MWe</span>
+            <div class="bar-meter" aria-hidden="true"><div class="bar-meter-fill" id="r-mwe-bar"></div></div>
+          </div>
+          <div class="ro"><span class="ro-k">Turbine</span><span class="ro-v" id="r-rpm">3000 rpm</span></div>
+          <div class="ro"><span class="ro-k">Condenser</span><span class="ro-v" id="r-cond">0.08 bar</span><span class="ro-sub" id="r-cond-sub">41 °C</span></div>
+          <div class="ro"><span class="ro-k">Heat to the air</span><span class="ro-v" id="r-qcond">171 MW</span></div>
+          <div class="ro"><span class="ro-k">Passive cooling</span><span class="ro-v" id="r-dhrs">Standby</span></div>
+        </div>
+      </div>
+
+      <div class="panel panel-alarms" role="tabpanel" id="panel-alarms" aria-labelledby="tab-alarms" hidden>
+        <div class="annunciator-head">
+          <h2 class="h">Alarms</h2>
+          <button type="button" class="btn small" id="btn-ack" disabled>Acknowledge</button>
+        </div>
+        <ul class="annunciator" id="annunciator"></ul>
+        <h2 class="h">Event log</h2>
+        <ol class="log" id="log" aria-live="polite"></ol>
+      </div>
+    </section>
+
+    <section class="trends" aria-labelledby="trend-title">
+      <div class="trend-head">
+        <h2 class="h" id="trend-title">Trends</h2>
+        <span class="trend-span" id="trend-span">Last 2 minutes</span>
+      </div>
+      <div class="trend-box" id="trend-box">
+        <canvas id="trend" aria-hidden="true"></canvas>
+        <div class="trend-tip" id="trend-tip" hidden></div>
+      </div>
+      <p class="sr-only" id="trend-summary" aria-live="off"></p>
+    </section>
+
+    <section class="how" aria-labelledby="how-title">
+      <h2 id="how-title">How it works</h2>
+      <div class="how-grid">
+        <div>
+          <h3>The plant</h3>
+          <p>The plant is a small modular reactor, sized from NuScale's published module: 250 MW of heat, 77 MW of electricity, water at 138 bar so it can't boil. Heat goes from the fuel to the primary water, from that to the steam generator, and the steam spins the turbine. Unlike older plants it can cool itself for days with no power at all: steam condenses in a heat exchanger in the pool and runs back by gravity.</p>
+          <h3>Neutrons</h3>
+          <p>Power follows point kinetics with six groups of delayed neutrons for uranium-235. The delayed ones, under 1% of the total, arrive seconds to a minute late, and they are what make a reactor controllable by hand:</p>
+          <p class="eq">dn/dt = (&rho; &minus; &beta;) / &Lambda; &middot; n + &Sigma; &lambda;<sub>i</sub>C<sub>i</sub> + S<br>dC<sub>i</sub>/dt = &beta;<sub>i</sub> / &Lambda; &middot; n &minus; &lambda;<sub>i</sub>C<sub>i</sub></p>
+          <p>Here n is power relative to full, &rho; the reactivity, &beta; = 0.0065 the delayed fraction, &Lambda; = 20 &micro;s the prompt generation time, C<sub>i</sub> the precursor groups and S a weak source so a shut-down core still shows counts. Each step is solved implicitly in closed form, and split finer when the core goes prompt critical.</p>
+        </div>
+        <div>
+          <h3>Feedback</h3>
+          <p>Reactivity comes from the rods (an S-shaped worth curve), boron in the water (&minus;8 pcm per ppm), fuel temperature (Doppler, &minus;3 pcm/&deg;C), water temperature (&minus;20 pcm/&deg;C) and steam voids. Both temperature effects are negative, so pulling rods raises power only until the hotter fuel and water cancel what you added. The sandbox shows that taking the protection away doesn't make the reactor explode; it takes more than one mistake to damage the core.</p>
+          <h3>Heat and water</h3>
+          <p>The fuel and core water are lumped nodes. The loop is a chain of cells that carry water round at the flow rate, and the same cells colour the pipes you see. When the pump stops, hot water rising from the core and cold water sinking from the steam generator keep it turning at a few percent: natural circulation. After a trip, decay heat keeps coming, about 6% at first, 1.5% after an hour, fitted as six decaying groups.</p>
+          <h3>What's simplified</h3>
+          <p>One loop instead of several, lumped fuel, a simple pressurizer and steam generator, no xenon yet, and setpoints that are illustrative rather than any real plant's. It runs at a fixed 60 steps a second, switching to longer steps once the reactor is shut down so a week of passive cooling plays in seconds.</p>
+          <p class="source">Written from scratch in JavaScript and Canvas 2D, no libraries. <a href="https://github.com/zafirmaricar/zafirmaricar.github.io/tree/main/reactor">Source on GitHub</a>.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <dialog class="dialog" id="scenarios" aria-labelledby="scenarios-title">
+    <form method="dialog" class="dialog-box">
+      <div class="dialog-head">
+        <h2 id="scenarios-title">Scenarios</h2>
+        <button type="submit" class="btn small" value="cancel" aria-label="Close">Close</button>
+      </div>
+      <ul class="scenario-list" id="scenario-list"></ul>
+    </form>
+  </dialog>
+
+  <dialog class="dialog" id="protect-dialog" aria-labelledby="protect-title">
+    <form method="dialog" class="dialog-box">
+      <h2 id="protect-title">Switch off protection?</h2>
+      <p>Nothing will trip the reactor for you. You can push it until the core is damaged, and the plant will tell you which trip would have saved it.</p>
+      <div class="dialog-actions">
+        <button type="submit" class="btn danger" value="off">Switch it off</button>
+        <button type="submit" class="btn" value="keep" autofocus>Keep it on</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="js/sim.js"></script>
+  <script src="js/scenarios.js"></script>
+  <script src="js/art.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/trend.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

@@ -146,6 +146,33 @@ li + li { margin-top: 0.35em; }
   gap: var(--gap) var(--rock-gap);
 }
 
+/* The featured project spans the page: its clip, with the chips and button
+   under it, beside the text. Where there isn't room they stack. The grid
+   doesn't hang off .stack so a broken-off chunk, cloned outside it, keeps
+   the same layout. */
+.stack > article.rock.featured { max-width: none; }
+.rock.featured {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 4fr);
+  grid-template-rows: auto 1fr;
+  grid-template-areas: "media text" "meta text";
+  align-items: start;
+  gap: 18px 32px;
+}
+.featured > .media { grid-area: media; margin: 0; }
+.featured-text { grid-area: text; }
+.featured-meta { grid-area: meta; }
+.featured-text > :last-child { margin-bottom: 0; }
+.featured-meta .chips { margin-top: 0; }
+.featured-meta .cta { margin-top: 16px; }
+@media (max-width: 860px) {
+  .rock.featured {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-template-areas: "media" "text" "meta";
+  }
+}
+
 .eyebrow {
   font-family: var(--mono);
   font-size: 0.78rem;
