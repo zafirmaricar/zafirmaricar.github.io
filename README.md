@@ -10,7 +10,12 @@ has a concave top instead of a dome: its corners rise into lips, so the rain
 collects there as a pond until it spills over the sides.
 
 Rocks can be broken. Clicking a rock cracks it open at that spot, and a second hit
-on the same spot breaks that chunk off. The chunk carries the
+on the same spot breaks that chunk off. The chunk is sized to the rock where
+it was hit: out in solid rock it's a big piece, but on a thin neck left between
+holes, a strip along an edge or a small leftover piece it's only about as wide
+as that piece, so it doesn't tear a big bite out of the rock around it. The
+first hit measures this as the shortest line through the spot that stays in
+solid rock. The chunk carries the
 text it covered, falls as a rigid body, bounces off the rocks below and pushes
 the water aside until it drops off the page. "Repair rocks" restores everything.
 

@@ -10,7 +10,11 @@
 
   const Rocks = root.Rocks;
   const MERGE_RADIUS = 45;   // hits closer than this build on the same fracture
+  const MIN_MERGE = 16;      // (3/4 of the size of a smaller one, but at least this)
   const HITS_TO_BREAK = 2;
+  const MIN_RADIUS = 8;      // smallest chunk outline
+  const PROBES = 24;         // directions that size up the rock at a first hit
+  const MIN_CHUNK = 40;      // px^2; a smaller piece crumbles to dust
   const GRAVITY = 0.32;      // px / frame^2
   const RESTITUTION = 0.2;
   const MU = 0.5;
@@ -96,20 +100,27 @@
       const s = this.state(rock.el);
       const lx = x - rock.ox, ly = y - rock.oy;
 
-      let spot = null, best = MERGE_RADIUS;
+      let spot = null, best = Infinity;
       for (const sp of s.spots) {
-        if (sp.scar) continue; // cracks round a blast hole
+        if (sp.scar) continue; // cracks round a hole
         const d = Math.hypot(sp.x - lx, sp.y - ly);
-        if (d < best) { best = d; spot = sp; }
+        if (d < best && d < sp.merge) { best = d; spot = sp; }
       }
       if (!spot) {
         // The first hit decides the chunk's outline and cracks most of it
         // open, so the piece that breaks off follows the visible fracture.
-        const outline = Rocks.star(lx, ly, 60 + Math.random() * 30, Math.random);
-        spot = { x: lx, y: ly, hits: 0, outline: outline, cracks: majorCracks(lx, ly, outline) };
+        // The outline is only as big as the rock round the hit, so a small
+        // leftover piece or a thin strip breaks off at its own size instead
+        // of taking a big bite out of the rock it hangs from.
+        const full = 60 + Math.random() * 30;
+        const r = Math.max(MIN_RADIUS, Math.min(full, thickness(rock, x, y, full)));
+        const outline = Rocks.star(lx, ly, r, Math.random);
+        const merge = Math.max(MIN_MERGE, Math.min(MERGE_RADIUS, r * 0.75));
+        spot = { x: lx, y: ly, r: r, merge: merge, hits: 0, outline: outline, cracks: majorCracks(lx, ly, outline, r) };
         s.spots.push(spot);
       } else {
-        for (let k = 0; k < 3; k++) spot.cracks.push(crackLine(lx, ly, 30 + Math.random() * 30));
+        const len = 30 * Math.min(1, spot.r / 60);
+        for (let k = 0; k < 3; k++) spot.cracks.push(crackLine(lx, ly, len * (1 + Math.random())));
       }
       spot.hits++;
       s.rev = (s.rev || 0) + 1;
@@ -135,21 +146,24 @@
         shrunk[i] = px + (outline[i] - px) * 0.94;
         shrunk[i + 1] = py + (outline[i + 1] - py) * 0.94;
       }
-      const piece = Rocks.carve(rock, px, py, shrunk, [], 0)[0];
-      if (!piece) return;
-      const pts = piece.pts;
-      const poly = Rocks.makePoly(pts);
-      if (!(poly.area > 200)) return;
-
       const el = rock.el;
-      const ghost = this.makeGhost(el, rock.ox, rock.oy, pts, poly.cx, poly.cy);
+      const piece = Rocks.carve(rock, px, py, shrunk, [], 0)[0];
+      const poly = piece && Rocks.makePoly(piece.pts);
+      // Clone the panel for the chunk before the new hole is masked out. A
+      // crumb too small to fly just turns to dust.
+      if (poly && poly.area > MIN_CHUNK) {
+        const ghost = this.makeGhost(el, rock.ox, rock.oy, piece.pts, poly.cx, poly.cy);
+        this.chunks.push(makeChunk(piece.pts, poly, px, py, el, ghost));
+      }
 
       const local = new Float32Array(outline.length);
       for (let i = 0; i < outline.length; i += 2) { local[i] = outline[i] - rock.ox; local[i + 1] = outline[i + 1] - rock.oy; }
       s.holes.push({ pts: local, cx: spot.x, cy: spot.y });
+      // A cracked spot the hole swallowed keeps the cracks still showing
+      // round it, but a hit there starts a new fracture sized to what's left.
+      const gone = Rocks.makePoly(local);
+      for (const sp of s.spots) if (!sp.scar && Rocks.pointInPoly(gone, sp.x, sp.y)) sp.scar = true;
       applyMask(el, s.holes);
-
-      this.chunks.push(makeChunk(pts, poly, px, py, el, ghost));
     }
 
     // A bomb going off at (x, y). Every rock in reach loses everything inside
@@ -371,9 +385,24 @@
     return cracks;
   }
 
+  // How thick the rock is at (x, y): the shortest line through it that
+  // stays in solid rock, ending at the rock's edge or a hole (at most
+  // 2 * `max`). Anywhere in a big rock, even next to its edge, that's the
+  // whole rock, but on a neck left between holes, a strip along the edge or
+  // a small leftover piece it's about the piece's width.
+  function thickness(rock, x, y, max) {
+    let min = 2 * max;
+    for (let k = 0; k < PROBES; k++) {
+      const a = (k / PROBES) * Math.PI, dx = Math.cos(a), dy = Math.sin(a);
+      min = Math.min(min, Rocks.freeRun(rock, x, y, dx, dy, max) + Rocks.freeRun(rock, x, y, -dx, -dy, max));
+    }
+    return min;
+  }
+
   // A heavy first fracture: radial cracks out to the chunk outline, most of
-  // the outline itself cracked open, and a few cracks running past it.
-  function majorCracks(x, y, outline) {
+  // the outline itself cracked open, and a few cracks running past it (not
+  // as far past a small one).
+  function majorCracks(x, y, outline, r) {
     const n = outline.length / 2;
     const cracks = [];
     for (let i = 0; i < n; i += 2 + (Math.random() < 0.5 ? 1 : 0)) {
@@ -388,7 +417,7 @@
       const i = Math.floor(Math.random() * n);
       const ox = outline[2 * i], oy = outline[2 * i + 1];
       const d = Math.hypot(ox - x, oy - y) || 1;
-      const ext = 20 + Math.random() * 35;
+      const ext = (20 + Math.random() * 35) * Math.min(1, r / 60);
       cracks.push(jagged(ox, oy, ox + ((ox - x) / d) * ext, oy + ((oy - y) / d) * ext));
     }
     return cracks;

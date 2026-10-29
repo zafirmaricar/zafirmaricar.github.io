@@ -257,6 +257,18 @@
     }
   }
 
+  // Distance from (x, y), a point in the solid part of `rock`, along unit
+  // (dx, dy) to the first edge of the outline or of a hole, at most `tMax`.
+  const runCross = [];
+  function freeRun(rock, x, y, dx, dy, tMax) {
+    runCross.length = 0;
+    rayCrossings(rock, x, y, dx, dy, tMax, -1, runCross);
+    for (let h = 0; h < rock.holes.length; h++) rayCrossings(rock.holes[h], x, y, dx, dy, tMax, h, runCross);
+    let t = tMax;
+    for (let k = 0; k < runCross.length; k += 2) if (runCross[k] < t) t = runCross[k];
+    return t;
+  }
+
   // Pieces of `rock` inside `outline`, a polygon star-shaped about (cx, cy)
   // with its vertices in angular order. Along each ray from the centre a
   // piece takes the first stretch of solid rock (inside the outline, outside
@@ -408,6 +420,6 @@
     return new Float32Array(keep.length >= 6 ? keep : pts);
   }
 
-  root.Rocks = { makeRock, makePoly, pointInPoly, solidAt, contact, hashString, mulberry32, star, convexHull, clipToConvex, carve };
+  root.Rocks = { makeRock, makePoly, pointInPoly, solidAt, contact, hashString, mulberry32, star, convexHull, clipToConvex, carve, freeRun };
   if (typeof module !== 'undefined') module.exports = root.Rocks;
 })(typeof window !== 'undefined' ? window : globalThis);
