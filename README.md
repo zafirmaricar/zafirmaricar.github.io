@@ -16,10 +16,12 @@ keeps a single pond when there's no room).
 Rocks can be broken. Clicking a rock cracks it open at that spot, and a second hit
 on the same spot breaks that chunk off. The chunk is sized to the rock where
 it was hit: out in solid rock it's a big piece, but on a thin neck left between
-holes, a strip along an edge or a small leftover piece it's only about as wide
-as that piece, so it doesn't tear a big bite out of the rock around it. The
-first hit measures this as the shortest line through the spot that stays in
-solid rock. The chunk carries the
+holes or a strip along an edge it's only about as wide as that piece, so it
+doesn't tear a big bite out of the rock around it. The first hit measures this
+as the shortest line through the spot that stays in solid rock. A small piece
+of rock on its own (up to 6000 px², or one that hangs on only by threads a few
+px thin) is never chipped into smaller bits: the first hit cracks it all over
+and the second takes all of it. The chunk carries the
 text it covered, falls as a rigid body, bounces off the rocks below and pushes
 the water aside until it drops off the page. "Repair rocks" restores everything.
 

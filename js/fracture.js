@@ -15,6 +15,10 @@
   const MIN_RADIUS = 8;      // smallest chunk outline
   const PROBES = 24;         // directions that size up the rock at a first hit
   const MIN_CHUNK = 40;      // px^2; a smaller piece crumbles to dust
+  const SMALL = 6000;        // px^2; a piece of rock up to this size breaks off whole
+  const CELL = 2;            // px; grid the search for a small piece runs on
+  const SPAN = 160;          // px; how far from the hit that search looks
+  const PIECE_DIRS = 180;    // corners round a small piece's outline
   const GRAVITY = 0.32;      // px / frame^2
   const RESTITUTION = 0.2;
   const MU = 0.5;
@@ -104,19 +108,34 @@
       for (const sp of s.spots) {
         if (sp.scar) continue; // cracks round a hole
         const d = Math.hypot(sp.x - lx, sp.y - ly);
-        if (d < best && d < sp.merge) { best = d; spot = sp; }
+        // A small piece is one spot wherever on it the hit lands.
+        const near = d < sp.merge || (sp.region && Rocks.pointInPoly(sp.region, lx, ly));
+        if (near && d < best) { best = d; spot = sp; }
       }
       if (!spot) {
         // The first hit decides the chunk's outline and cracks most of it
         // open, so the piece that breaks off follows the visible fracture.
-        // The outline is only as big as the rock round the hit, so a small
-        // leftover piece or a thin strip breaks off at its own size instead
+        // The outline is only as big as the rock round the hit, so a thin
+        // strip or a neck between holes breaks off at its own size instead
         // of taking a big bite out of the rock it hangs from.
         const full = 60 + Math.random() * 30;
-        const r = Math.max(MIN_RADIUS, Math.min(full, thickness(rock, x, y, full)));
+        const t = thickness(rock, x, y, full);
+        const r = Math.max(MIN_RADIUS, Math.min(full, t));
         const outline = Rocks.star(lx, ly, r, Math.random);
         const merge = Math.max(MIN_MERGE, Math.min(MERGE_RADIUS, r * 0.75));
-        spot = { x: lx, y: ly, r: r, merge: merge, hits: 0, outline: outline, cracks: majorCracks(lx, ly, outline, r) };
+        spot = { x: lx, y: ly, r: r, merge: merge, hits: 0, outline: outline };
+        // A small piece of rock on its own (or hanging on by a thread)
+        // cracks all over instead, and the next hit takes all of it rather
+        // than chipping it into even smaller bits. Rock any thicker than
+        // this can't be such a piece, so the search is skipped there.
+        const piece = t < Math.sqrt(2 * SMALL) ? smallPiece(rock, x, y) : null;
+        if (piece) {
+          const local = shift(piece.outline, -rock.ox, -rock.oy);
+          spot.region = Rocks.makePoly(local);
+          spot.cracks = majorCracks(lx, ly, pick(local, 14), 0);
+        } else {
+          spot.cracks = majorCracks(lx, ly, outline, Math.min(1, r / 60));
+        }
         s.spots.push(spot);
       } else {
         const len = 30 * Math.min(1, spot.r / 60);
@@ -127,27 +146,38 @@
 
       if (spot.hits >= HITS_TO_BREAK) {
         s.spots.splice(s.spots.indexOf(spot), 1);
-        this.breakOff(rock, s, spot);
+        this.breakOff(rock, s, spot, x, y);
       }
       this.onDamage();
       return true;
     }
 
-    breakOff(rock, s, spot) {
+    // Breaks off the spot's chunk; (x, y) is the hit that broke it.
+    breakOff(rock, s, spot, x, y) {
       const px = spot.x + rock.ox, py = spot.y + rock.oy;
-      const outline = new Float32Array(spot.outline.length);
-      for (let i = 0; i < outline.length; i += 2) {
-        outline[i] = spot.outline[i] + rock.ox;
-        outline[i + 1] = spot.outline[i + 1] + rock.oy;
+      if (spot.region) {
+        // Look at the small piece again, as the rock round it may have
+        // changed since it cracked, and take all of it.
+        const at = Rocks.solidAt(rock, px, py);
+        const piece = smallPiece(rock, at ? px : x, at ? py : y);
+        if (piece) { this.cut(rock, s, piece.cx, piece.cy, piece.outline, piece.outline); return; }
       }
+      const outline = shift(spot.outline, rock.ox, rock.oy);
       // The chunk is slightly smaller than the hole it leaves so it falls clear.
       const shrunk = new Float32Array(outline.length);
       for (let i = 0; i < outline.length; i += 2) {
         shrunk[i] = px + (outline[i] - px) * 0.94;
         shrunk[i + 1] = py + (outline[i + 1] - py) * 0.94;
       }
+      this.cut(rock, s, px, py, shrunk, outline);
+    }
+
+    // Knocks a hole in the rock where `outline` is (doc px, star-shaped about
+    // (px, py)), and the solid rock seen from (px, py) inside `inner` flies
+    // off as a chunk.
+    cut(rock, s, px, py, inner, outline) {
       const el = rock.el;
-      const piece = Rocks.carve(rock, px, py, shrunk, [], 0)[0];
+      const piece = Rocks.carve(rock, px, py, inner, [], 0)[0];
       const poly = piece && Rocks.makePoly(piece.pts);
       // Clone the panel for the chunk before the new hole is masked out. A
       // crumb too small to fly just turns to dust.
@@ -156,9 +186,8 @@
         this.chunks.push(makeChunk(piece.pts, poly, px, py, el, ghost));
       }
 
-      const local = new Float32Array(outline.length);
-      for (let i = 0; i < outline.length; i += 2) { local[i] = outline[i] - rock.ox; local[i + 1] = outline[i + 1] - rock.oy; }
-      s.holes.push({ pts: local, cx: spot.x, cy: spot.y });
+      const local = shift(outline, -rock.ox, -rock.oy);
+      s.holes.push({ pts: local, cx: px - rock.ox, cy: py - rock.oy });
       // A cracked spot the hole swallowed keeps the cracks still showing
       // round it, but a hit there starts a new fracture sized to what's left.
       const gone = Rocks.makePoly(local);
@@ -206,8 +235,7 @@
           c.w = (Math.random() - 0.5) * 0.12;
           this.chunks.push(c);
         }
-        const local = new Float32Array(outline.length);
-        for (let i = 0; i < local.length; i += 2) { local[i] = outline[i] - rock.ox; local[i + 1] = outline[i + 1] - rock.oy; }
+        const local = shift(outline, -rock.ox, -rock.oy);
         const lx = x - rock.ox, ly = y - rock.oy;
         s.holes.push({ pts: local, cx: lx, cy: ly });
         // Cracks that were inside the hole went with it; new ones run out
@@ -399,10 +427,139 @@
     return min;
   }
 
+  // The small piece of rock that (x, y) is on, if there is one: all the
+  // solid rock joined to it, where joins thinner than a few px don't count,
+  // so a piece hanging on by a thread counts on its own. Returns null if
+  // that's more than SMALL, else { cx, cy, outline }: (cx, cy) a point deep
+  // in the piece, and `outline` a polygon star-shaped about it that holds
+  // all of the piece but stops short of the rock round it.
+  function smallPiece(rock, x, y) {
+    const h = Math.round(SPAN / CELL), N = 2 * h + 1;
+    const x0 = x - h * CELL, y0 = y - h * CELL; // centre of cell 0; the hit is cell (h, h)
+    const solid = new Int8Array(N * N).fill(-1);
+    const at = (k) => {
+      if (solid[k] < 0) {
+        const i = k % N;
+        solid[k] = Rocks.solidAt(rock, x0 + i * CELL, y0 + ((k - i) / N) * CELL) ? 1 : 0;
+      }
+      return solid[k] === 1;
+    };
+    const border = (k) => { const i = k % N, j = (k - i) / N; return i < 2 || j < 2 || i > N - 3 || j > N - 3; };
+    const limit = SMALL / (CELL * CELL);
+    // Cells joined to `start` through cells that pass `ok`, or null if they
+    // run past `limit` or out to the edge of the grid.
+    function fill(start, ok) {
+      const seen = new Uint8Array(N * N);
+      const list = [start];
+      seen[start] = 1;
+      for (let q = 0; q < list.length; q++) {
+        const k = list[q];
+        if (border(k)) return null;
+        for (const n of [k - 1, k + 1, k - N, k + N]) {
+          if (seen[n] || !ok(n)) continue;
+          seen[n] = 1;
+          if (list.push(n) > limit) return null;
+        }
+      }
+      return list;
+    }
+    const around = (k) => [k, k - 1, k + 1, k - N, k + N, k - N - 1, k - N + 1, k + N - 1, k + N + 1];
+    const start = h * N + h;
+    let cells = fill(start, at);
+    if (!cells) {
+      // Too big all told, but the hit may be on a piece that hangs on by
+      // threads. Thinning the rock by a cell all round cuts them.
+      const core = (k) => around(k).every(at);
+      const seed = around(start).find(core);
+      const inner = seed === undefined ? null : fill(seed, core);
+      if (!inner) return null;
+      // Put back the rim the thinning took off.
+      const mark = new Uint8Array(N * N);
+      cells = [];
+      for (const k of inner) for (const n of around(k)) if (!mark[n] && at(n)) { mark[n] = 1; cells.push(n); }
+      if (cells.length > limit) return null;
+    }
+
+    // Centre on the cell deepest in the piece (nearest the middle of it if
+    // there's a tie), so the chunk carved from there sees all of it.
+    const inside = new Uint8Array(N * N);
+    for (const k of cells) inside[k] = 1;
+    const depth = new Int16Array(N * N).fill(-1);
+    const queue = cells.filter((k) => !(inside[k - 1] && inside[k + 1] && inside[k - N] && inside[k + N]));
+    for (const k of queue) depth[k] = 0;
+    for (let q = 0; q < queue.length; q++) {
+      const k = queue[q];
+      for (const n of [k - 1, k + 1, k - N, k + N]) if (inside[n] && depth[n] < 0) { depth[n] = depth[k] + 1; queue.push(n); }
+    }
+    const top = depth[queue[queue.length - 1]];
+    let mx = 0, my = 0;
+    for (const k of cells) { mx += k % N; my += Math.floor(k / N); }
+    mx /= cells.length; my /= cells.length;
+    let deep = -1, bestD = Infinity;
+    for (const k of cells) {
+      if (depth[k] !== top) continue;
+      const d = Math.hypot((k % N) - mx, Math.floor(k / N) - my);
+      if (d < bestD) { bestD = d; deep = k; }
+    }
+    const cx = x0 + (deep % N) * CELL, cy = y0 + Math.floor(deep / N) * CELL;
+
+    // How far out the piece reaches in each direction from there, and how
+    // near other rock comes. A cell counts in every direction it spans.
+    const K = PIECE_DIRS, step = (2 * Math.PI) / K, half = CELL * Math.SQRT1_2;
+    const far = new Float32Array(K), near = new Float32Array(K).fill(Infinity);
+    function spread(k, fn) {
+      const dx = x0 + (k % N) * CELL - cx, dy = y0 + Math.floor(k / N) * CELL - cy;
+      const d = Math.hypot(dx, dy), a = Math.atan2(dy, dx), w = Math.atan(half / Math.max(d, half));
+      for (let b = Math.floor((a - w) / step); b <= Math.floor((a + w) / step); b++) fn(((b % K) + K) % K, d);
+    }
+    let i0 = N, i1 = 0, j0 = N, j1 = 0;
+    for (const k of cells) {
+      spread(k, (b, d) => { if (d + half > far[b]) far[b] = d + half; });
+      const i = k % N, j = Math.floor(k / N);
+      i0 = Math.min(i0, i); i1 = Math.max(i1, i); j0 = Math.min(j0, j); j1 = Math.max(j1, j);
+    }
+    for (let j = Math.max(0, j0 - 3); j <= Math.min(N - 1, j1 + 3); j++) {
+      for (let i = Math.max(0, i0 - 3); i <= Math.min(N - 1, i1 + 3); i++) {
+        const k = j * N + i;
+        if (!inside[k] && at(k)) spread(k, (b, d) => { if (d - half < near[b]) near[b] = d - half; });
+      }
+    }
+    // Corner b sits between directions b - 1 and b. It reaches a little past
+    // the piece but not into rock just beyond it, and stops short of rock
+    // that is in the way (the piece behind that is left).
+    const out = new Float32Array(2 * K);
+    for (let b = 0; b < K; b++) {
+      const p = (b + K - 1) % K;
+      const f = Math.max(far[p], far[b]), c = Math.min(near[p], near[b]);
+      const t = c < f - 4 ? Math.max(0.5, c - 0.5) : Math.max(f, Math.min(f + 1.5, c - 0.25));
+      out[2 * b] = cx + Math.cos(b * step) * t;
+      out[2 * b + 1] = cy + Math.sin(b * step) * t;
+    }
+    return { cx, cy, outline: Rocks.simplify(out) };
+  }
+
+  function shift(pts, dx, dy) {
+    const out = new Float32Array(pts.length);
+    for (let i = 0; i < pts.length; i += 2) { out[i] = pts[i] + dx; out[i + 1] = pts[i + 1] + dy; }
+    return out;
+  }
+
+  // About `k` of the corners of `pts`, evenly spread.
+  function pick(pts, k) {
+    const n = pts.length / 2;
+    if (n <= k) return pts;
+    const out = new Float32Array(2 * k);
+    for (let i = 0; i < k; i++) {
+      const j = Math.floor((i * n) / k);
+      out[2 * i] = pts[2 * j]; out[2 * i + 1] = pts[2 * j + 1];
+    }
+    return out;
+  }
+
   // A heavy first fracture: radial cracks out to the chunk outline, most of
-  // the outline itself cracked open, and a few cracks running past it (not
-  // as far past a small one).
-  function majorCracks(x, y, outline, r) {
+  // the outline itself cracked open, and a few cracks running `past` it (a
+  // fraction of the usual length; none round a small piece).
+  function majorCracks(x, y, outline, past) {
     const n = outline.length / 2;
     const cracks = [];
     for (let i = 0; i < n; i += 2 + (Math.random() < 0.5 ? 1 : 0)) {
@@ -413,11 +570,11 @@
       const a = (start + s) % n, b = (a + 1) % n;
       cracks.push(jagged(outline[2 * a], outline[2 * a + 1], outline[2 * b], outline[2 * b + 1]));
     }
-    for (let k = 0; k < 4; k++) {
+    for (let k = 0; past > 0 && k < 4; k++) {
       const i = Math.floor(Math.random() * n);
       const ox = outline[2 * i], oy = outline[2 * i + 1];
       const d = Math.hypot(ox - x, oy - y) || 1;
-      const ext = (20 + Math.random() * 35) * Math.min(1, r / 60);
+      const ext = (20 + Math.random() * 35) * past;
       cracks.push(jagged(ox, oy, ox + ((ox - x) / d) * ext, oy + ((oy - y) / d) * ext));
     }
     return cracks;

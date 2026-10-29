@@ -457,6 +457,6 @@
     return new Float32Array(keep.length >= 6 ? keep : pts);
   }
 
-  root.Rocks = { makeRock, makePoly, pointInPoly, solidAt, contact, hashString, mulberry32, star, convexHull, clipToConvex, carve, freeRun };
+  root.Rocks = { makeRock, makePoly, pointInPoly, solidAt, contact, hashString, mulberry32, star, convexHull, clipToConvex, carve, freeRun, simplify };
   if (typeof module !== 'undefined') module.exports = root.Rocks;
 })(typeof window !== 'undefined' ? window : globalThis);
