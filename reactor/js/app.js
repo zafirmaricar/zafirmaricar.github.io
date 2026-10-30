@@ -25,6 +25,9 @@
   function save(key, v) {
     try { window.localStorage.setItem('reactor.' + key, v ? '1' : '0'); } catch (e) { /* private mode */ }
   }
+  function loadJSON(key) {
+    try { return JSON.parse(window.localStorage.getItem('reactor.' + key)); } catch (e) { return null; }
+  }
 
   const phone = window.matchMedia && window.matchMedia('(max-width: 699px)').matches;
   const app = {
@@ -40,6 +43,16 @@
   };
   const ui = new window.ReactorUI.UI(app);
   const leaders = ui.leaders();
+
+  // Achievements, kept in this browser between visits.
+  const Ach = window.ReactorAchievements;
+  const tracker = new Ach.Tracker(loadJSON('achievements'));
+  function saveAchievements() {
+    try { window.localStorage.setItem('reactor.achievements', JSON.stringify(tracker.save())); } catch (e) { /* private mode */ }
+  }
+  const achUi = new window.ReactorAchievementsUI.AchievementsUI(app, tracker, saveAchievements);
+  app.onAchievement = function () { audio.fanfare(); };
+  app.onGoalDone = function () { ui.dropGoal(); };
 
   let acc = 0;
 
@@ -68,6 +81,7 @@
     ui.setLabels(on);
     save('labels', on);
   };
+  app.showGoal = function () { ui.showBrief(Scenarios.byId(app.scenario), achUi.goal); };
   app.setSound = function (on) {
     app.sound = on;
     audio.setOn(on);
@@ -77,7 +91,9 @@
   };
 
   let prevTripped = false;
-  app.start = function (id) {
+  // `goalId` is the achievement Try it was pressed for. Restarting the same
+  // scenario keeps the goal; picking another drops it.
+  app.start = function (id, goalId) {
     const sc = Scenarios.byId(id);
     app.scenario = sc.id;
     app.s = Scenarios.start(sc.id);
@@ -89,7 +105,10 @@
     renderer.reset();
     trend.reset();
     ui.reset(app.s);
-    ui.showBrief(sc);
+    tracker.startRun();
+    const keep = achUi.goal && achUi.goal.scenario === sc.id ? achUi.goal : null;
+    achUi.setGoal(goalId ? Ach.byId(goalId) : keep);
+    ui.showBrief(sc, achUi.goal);
     syncSpeed();
     try {
       window.history.replaceState(null, '', sc.id === 'full' ? window.location.pathname + window.location.search : '#' + sc.id);
@@ -247,6 +266,10 @@
       syncSpeed();
       ui.showDamage(s);
     }
+    const fresh = tracker.check(s, Date.now());
+    if (tracker.changed) saveAchievements();
+    if (fresh.length) achUi.unlocked(fresh);
+    else if (tracker.changed) achUi.refresh();
 
     view.reduced = app.reduced;
     view.labels = app.labels;

@@ -36,6 +36,7 @@
       <button type="button" class="tool" id="btn-labels" aria-pressed="true">Labels</button>
       <button type="button" class="tool" id="btn-neutrons" aria-pressed="false" title="Show neutrons flying in the core">Neutrons</button>
       <button type="button" class="tool" id="btn-sound" aria-pressed="true">Sound</button>
+      <button type="button" class="tool ach-tool" id="btn-ach" aria-label="Achievements"><canvas width="12" height="12" aria-hidden="true"></canvas><span id="ach-count">0/18</span></button>
     </div>
   </header>
 
@@ -47,6 +48,7 @@
           <div class="labels" id="labels" aria-hidden="true"></div>
           <div class="clock" id="clock" aria-hidden="true">00:00:00</div>
           <div class="brief" id="brief" role="status" hidden></div>
+          <button type="button" class="goal" id="goal" hidden><span class="goal-k">Goal</span> <span id="goal-name"></span></button>
           <div class="card" id="card" role="dialog" aria-labelledby="card-title" hidden></div>
           <div class="damage" id="damage" role="alertdialog" aria-labelledby="damage-title" aria-describedby="damage-text" hidden>
             <div class="damage-box">
@@ -60,6 +62,12 @@
               </div>
             </div>
           </div>
+          <canvas class="ach-sparks" id="ach-sparks" aria-hidden="true"></canvas>
+          <button type="button" class="ach-toast" id="ach-toast" hidden>
+            <canvas class="ach-toast-icon" width="12" height="12" aria-hidden="true"></canvas>
+            <span class="ach-toast-text"><span class="ach-toast-k">Achievement unlocked</span><span class="ach-toast-name" id="ach-toast-name"></span></span>
+          </button>
+          <p class="sr-only" id="ach-live" role="status" aria-live="polite"></p>
         </div>
       </div>
       <div class="strip" id="strip">
@@ -241,6 +249,17 @@
         </div>
       </div>
     </section>
+
+    <section class="ach-section" id="achievements" aria-labelledby="ach-title">
+      <div class="ach-head">
+        <h2 id="ach-title">Achievements</h2>
+        <p class="ach-sum"><span id="ach-done">0</span> of <span id="ach-total">18</span> unlocked</p>
+        <div class="ach-meter" aria-hidden="true"><div class="ach-meter-fill" id="ach-meter-fill"></div></div>
+        <button type="button" class="btn small" id="ach-reset">Reset</button>
+      </div>
+      <p class="ach-intro">Each locked box says what to try, and Try it loads the scenario to start from. Progress is saved in this browser.</p>
+      <div id="ach-groups"></div>
+    </section>
   </main>
 
   <dialog class="dialog" id="scenarios" aria-labelledby="scenarios-title">
@@ -271,6 +290,8 @@
   <script src="js/audio.js"></script>
   <script src="js/trend.js"></script>
   <script src="js/ui.js"></script>
+  <script src="js/achievements.js"></script>
+  <script src="js/achievements-ui.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

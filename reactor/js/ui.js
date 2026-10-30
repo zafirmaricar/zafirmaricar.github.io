@@ -413,9 +413,26 @@
     if (d.showModal) d.showModal(); else d.setAttribute('open', '');
   };
 
-  UI.prototype.showBrief = function (sc) {
+  // `goal` is the achievement Try it was pressed for: it heads the briefing,
+  // which then stays up until dismissed.
+  UI.prototype.showBrief = function (sc, goal) {
     const box = $('brief');
     box.textContent = '';
+    if (goal) {
+      const g = document.createElement('p');
+      g.className = 'brief-goal';
+      const bright = root.ReactorAchievementsUI && root.ReactorAchievementsUI.BRIGHT[goal.group];
+      if (bright) g.style.setProperty('--b', bright);
+      const k = document.createElement('span');
+      k.className = 'brief-goal-k';
+      k.textContent = 'Goal';
+      const n = document.createElement('strong');
+      n.textContent = goal.name;
+      g.appendChild(k);
+      g.appendChild(n);
+      g.appendChild(document.createTextNode(' ' + goal.hint));
+      box.appendChild(g);
+    }
     const h = document.createElement('h2');
     h.textContent = sc.name;
     box.appendChild(h);
@@ -443,6 +460,17 @@
     box.hidden = false;
     this.watch = sc.watch === 'power' ? 'core' : sc.watch;
     this.setWatchLabel(this.watch);
+    clearTimeout(this.briefTimer);
+    if (!goal) this.briefTimer = setTimeout(function () { ui.hideBrief(); }, 16000);
+  };
+
+  // The goal's been reached: take it off the briefing, which then goes the
+  // way a plain one does.
+  UI.prototype.dropGoal = function () {
+    const g = document.querySelector('#brief .brief-goal');
+    if (!g) return;
+    g.parentNode.removeChild(g);
+    const ui = this;
     clearTimeout(this.briefTimer);
     this.briefTimer = setTimeout(function () { ui.hideBrief(); }, 16000);
   };

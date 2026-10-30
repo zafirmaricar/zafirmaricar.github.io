@@ -117,6 +117,13 @@ like a classic PWR so every part shows.
   there brings up a calm screen that names the trip that would have saved it.
 - The simulation steps at a fixed 60 Hz and can run ×10 and ×60, or ×3600
   once the reactor is shut down and quiet, to watch a blackout over days.
+- 18 achievements guide players round what the plant can do, from a first
+  SCRAM and a cold start to natural circulation, each protection trip, a
+  72-hour blackout and a meltdown in the sandbox. Each box at the bottom of
+  the page says what to try, and Try it loads the scenario to start from.
+  An unlock pops up a banner over the plant with pixel sparks and a fanfare,
+  and its box fills with colour once it scrolls into view. Progress is kept
+  in the visitor's browser (`localStorage`, key `reactor.achievements`).
 
 Files:
 
@@ -134,8 +141,13 @@ Files:
 - `reactor/js/trend.js`: the trend charts
 - `reactor/js/ui.js`: the control desk, readouts, alarms, event log,
   scenario picker, labels and inspect cards
+- `reactor/js/achievements.js`: the achievements and the tracker that tests
+  the plant against them each frame (no DOM)
+- `reactor/js/achievements-ui.js`: the achievement boxes, the unlock banner
+  and sparks, the counter in the top bar and the goal Try it sets
 - `reactor/js/app.js`: the 60 Hz loop, speeds, pixel scaling and pointer input
-- `reactor/test/`: tests for the model and the renderer, which need no browser:
+- `reactor/test/`: tests for the model, the renderer and the achievements
+  (each one is unlocked by driving the model), which need no browser:
   `node --test reactor/test/*.test.js`
 - `reactor/tools/`: makes the Projects clip and the link preview picture
   (`reactor/share.png`)

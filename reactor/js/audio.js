@@ -133,5 +133,15 @@
     tone(ctx, this.master, 'sine', 1175, t + 0.1, 0.11, 0.05);
   };
 
+  // A rising arpeggio for an achievement.
+  ReactorAudio.prototype.fanfare = function () {
+    const ctx = this.ctx;
+    if (!ctx || !this.on || ctx.state !== 'running') return;
+    const t = ctx.currentTime + 0.02, out = this.master;
+    [523.25, 659.25, 783.99, 1046.5].forEach(function (f, i) {
+      tone(ctx, out, 'square', f, t + i * 0.085, i === 3 ? 0.34 : 0.1, 0.045);
+    });
+  };
+
   root.ReactorAudio = ReactorAudio;
 })(typeof window !== 'undefined' ? window : globalThis);
