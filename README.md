@@ -124,12 +124,20 @@ like a classic PWR so every part shows.
   An unlock pops up a banner over the plant with pixel sparks and a fanfare,
   and its box fills with colour once it scrolls into view. Progress is kept
   in the visitor's browser (`localStorage`, key `reactor.achievements`).
+- The whole page is pixel art on one grid, not only the plant: a pixel is
+  2 × 2 CSS px. Text is Tiny5 and Press Start 2P at 16px, the one size where
+  both land on that grid, so nothing is anti-aliased. Borders are 2px,
+  corners are notched, and sliders, switches, meters and dialogs are drawn
+  in blocks with no gradients, blur or easing. The trend charts are plotted
+  in the same blocks: staircase lines, dotted grids and square markers.
 
 Files:
 
 - `reactor/index.html`: the page: the plant, the control desk (Reactor,
   Plant, Grid and Alarms tabs), trends and "How it works"
-- `reactor/css/reactor.css`: its styles
+- `reactor/css/reactor.css`: its styles, with the pixel grid's rules at the top
+- `reactor/fonts/reactor-pixel.woff2`: a percent sign on Tiny5's grid (Tiny5's
+  own reads as an x), built by `reactor/tools/pixel-font.py`
 - `reactor/js/sim.js`: the plant model and the protection system
 - `reactor/js/scenarios.js`: the scenarios and their briefings
 - `reactor/js/art.js`: the pixel art, all drawn in code (palette, parts,
@@ -138,7 +146,7 @@ Files:
   rods, the core's glow, machines, steam, the plume and the town's lights
 - `reactor/js/audio.js`: Geiger clicks, pump hum, turbine whine and the
   klaxon, synthesised with Web Audio
-- `reactor/js/trend.js`: the trend charts
+- `reactor/js/trend.js`: the trend charts, drawn in 2px blocks
 - `reactor/js/ui.js`: the control desk, readouts, alarms, event log,
   scenario picker, labels and inspect cards
 - `reactor/js/achievements.js`: the achievements and the tracker that tests
@@ -149,8 +157,8 @@ Files:
 - `reactor/test/`: tests for the model, the renderer and the achievements
   (each one is unlocked by driving the model), which need no browser:
   `node --test reactor/test/*.test.js`
-- `reactor/tools/`: makes the Projects clip and the link preview picture
-  (`reactor/share.png`)
+- `reactor/tools/`: makes the Projects clip, the link preview picture
+  (`reactor/share.png`) and the page's percent sign
 
 The clip (a SCRAM at full power) is recorded from the simulation itself, at
 2× in whole pixels:
@@ -160,6 +168,8 @@ The clip (a SCRAM at full power) is recorded from the simulation itself, at
     node reactor/tools/clip.js --poster | ffmpeg -f rawvideo -pix_fmt rgba -s 480x270 -i - -vf scale=960:540:flags=neighbor -c:v libwebp -lossless 1 -compression_level 6 assets/img/projects/pixel-reactor-1.webp
 
 `node reactor/tools/share.js` redraws `reactor/share.png`; it needs Playwright.
+`python3 reactor/tools/pixel-font.py` rebuilds the font; it needs
+`pip install fonttools brotli`.
 
 ## Updating the resume
 

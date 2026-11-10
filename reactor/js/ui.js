@@ -23,17 +23,14 @@
     const h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, s = t % 60;
     return (h ? h + ':' + String(m).padStart(2, '0') : String(m).padStart(2, '0')) + ':' + String(s).padStart(2, '0');
   }
-  function sup(n) {
-    const map = { '-': '⁻', '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹' };
-    return String(n).split('').map(function (c) { return map[c] || c; }).join('');
-  }
-  // Power as a percentage, switching to powers of ten when it is tiny.
+  // Power as a percentage, switching to powers of ten when it is tiny
+  // (2.5e-6 is 2.5 × 10 to the −6; the pixel fonts have no superscripts).
   function powerText(n) {
     const pct = n * 100;
     if (pct >= 10) return pct.toFixed(1) + '%';
     if (pct >= 0.1) return pct.toFixed(2) + '%';
     const e = Math.floor(Math.log(pct) / Math.LN10);
-    return (pct / Math.pow(10, e)).toFixed(1) + '×10' + sup(e) + '%';
+    return (pct / Math.pow(10, e)).toFixed(1) + 'e' + e + '%';
   }
 
   // Which alarm lamp is the first out for each trip.
@@ -187,6 +184,10 @@
     town: [444, 189, 'center', 'Town']
   };
 
+  // Which labels keep their place when there isn't room for all of them.
+  const LABEL_ORDER = ['rods', 'sg', 'core', 'pump', 'turbine', 'generator', 'tower', 'town', 'condenser',
+    'pzr', 'containment', 'pool', 'dhrs', 'bypass', 'feedpump'];
+
   function UI(app) {
     this.app = app;
     this.lastSeq = 0;
@@ -216,6 +217,9 @@
     });
     $('btn-sound').addEventListener('click', function () { app.setSound(!app.sound); });
     $('btn-scenarios').addEventListener('click', function () { ui.openScenarios(); });
+
+    // Sliders fill their track as they are dragged.
+    document.addEventListener('input', function (e) { if (e.target.type === 'range') fill(e.target); });
 
     // Reactor.
     $('c-rods').addEventListener('input', function (e) {
@@ -503,10 +507,53 @@
   };
   UI.prototype.setWatchLabel = function (id) {
     for (const k in this.labelEls) this.labelEls[k].classList.toggle('watch', k === id);
+    this.watchId = id;
+    this.fitLabels();
+  };
+  // Label text keeps to whole pixels, so on a small plant it is larger than
+  // the picture it was laid out for. Each label, the watched one first, is
+  // kept inside the picture and slid sideways off any label already placed;
+  // one with no room left is hidden (its part can still be tapped).
+  UI.prototype.fitLabels = function () {
+    const ui = this, scene = $('scene').getBoundingClientRect(), placed = [];
+    const shift = function (r, dx) { return { left: r.left + dx, right: r.right + dx, top: r.top, bottom: r.bottom }; };
+    const hits = function (r) {
+      for (let i = 0; i < placed.length; i++) {
+        const p = placed[i];
+        if (r.left < p.right - 3 && r.right > p.left + 3 && r.top < p.bottom - 3 && r.bottom > p.top + 3) return p;
+      }
+      return null;
+    };
+    const ids = LABEL_ORDER.filter(function (k) { return ui.labelEls[k]; });
+    ids.sort(function (a, b) { return (b === ui.watchId) - (a === ui.watchId); });
+    ids.forEach(function (k) {
+      const el = ui.labelEls[k];
+      if (el.style.marginLeft) el.style.marginLeft = '';
+      el.classList.remove('crowded');
+    });
+    ids.forEach(function (k) {
+      const el = ui.labelEls[k], r0 = el.getBoundingClientRect();
+      if (!r0.width) return;
+      let dx = r0.left < scene.left + 2 ? scene.left + 2 - r0.left : r0.right > scene.right - 2 ? scene.right - 2 - r0.right : 0;
+      const hit = hits(shift(r0, dx));
+      if (hit) {
+        const r = shift(r0, dx);
+        dx += (r.left + r.right < hit.left + hit.right) ? hit.left - 2 - r.right : hit.right + 2 - r.left;
+        const moved = shift(r0, dx);
+        if (Math.abs(dx) > r0.width / 2 - 4 || moved.left < scene.left || moved.right > scene.right || hits(moved)) {
+          el.classList.add('crowded');
+          return;
+        }
+      }
+      dx = Math.round(dx);
+      if (dx) el.style.marginLeft = dx + 'px';
+      placed.push(shift(r0, dx));
+    });
   };
   UI.prototype.setLabels = function (on) {
     $('labels').classList.toggle('off', !on);
     $('btn-labels').setAttribute('aria-pressed', String(on));
+    this.fitLabels();
   };
 
   // Leader lines from each label to its part, for the renderer.
@@ -707,10 +754,17 @@
   }
   function setClass(id, cls, on) { $(id).classList.toggle(cls, on); }
   function busy(el) { return document.activeElement === el && el.matches(':active, :focus-visible'); }
+  // The slider's track is filled up to its handle from --fill.
+  function fill(el) {
+    const lo = +el.min || 0, hi = el.max === '' ? 100 : +el.max;
+    const f = (hi > lo ? clamp((el.value - lo) / (hi - lo), 0, 1) * 100 : 0).toFixed(1) + '%';
+    if (el._fill !== f) { el._fill = f; el.style.setProperty('--fill', f); }
+  }
   function sync(id, value) {
     const el = $(id);
     if (el._dragging) return;
     if (String(el.value) !== String(value)) el.value = value;
+    fill(el);
   }
   function check(id, v) { const el = $(id); if (el.checked !== v) el.checked = v; }
   function press(id, v) { $(id).setAttribute('aria-pressed', String(v)); }
@@ -720,7 +774,7 @@
     // Reactor.
     sync('c-rods', ((inp.rodAuto || s.tripped ? s.rodX : inp.rodTarget) * 100).toFixed(1));
     const rodsMoving = Math.abs(inp.rodTarget - s.rodX) > 0.004 && !inp.rodAuto && !s.tripped;
-    setText('o-rods', Math.round(s.rodX * 100) + '% out' + (rodsMoving ? ' → ' + Math.round(inp.rodTarget * 100) + '%' : ''));
+    setText('o-rods', Math.round(s.rodX * 100) + '% out' + (rodsMoving ? ' to ' + Math.round(inp.rodTarget * 100) + '%' : ''));
     check('c-rod-auto', inp.rodAuto);
     $('c-rod-auto').disabled = s.tripped || s.rodY < 0.999;
     $('c-rods').disabled = s.tripped;
@@ -734,7 +788,7 @@
     $('c-sd').disabled = s.tripped || !inp.offsitePower;
     setText('o-sd', s.rodY > 0.999 ? 'Out' : s.rodY < 0.001 ? 'In' : Math.round(s.rodY * 100) + '%');
     sync('c-boron', inp.boronTarget);
-    setText('o-boron', Math.round(s.boron) + ' ppm' + (Math.abs(s.boron - inp.boronTarget) > 2 ? ' → ' + inp.boronTarget : ''));
+    setText('o-boron', Math.round(s.boron) + ' ppm' + (Math.abs(s.boron - inp.boronTarget) > 2 ? ' to ' + inp.boronTarget : ''));
     check('c-protect', inp.protection);
     setText('o-protect', inp.protection ? 'On' : 'Off');
     setClass('o-protect', 'warn', !inp.protection);
@@ -757,7 +811,7 @@
     const b = $('r-crit');
     if (b.textContent !== badge) { b.textContent = badge; b.className = 'badge ' + cls; }
     const per = s.period;
-    setText('r-period', !isFinite(per) || Math.abs(per) > 9999 ? '∞' : (per > 0 ? '+' : MINUS) + Math.abs(per).toFixed(Math.abs(per) < 100 ? 1 : 0) + ' s');
+    setText('r-period', !isFinite(per) || Math.abs(per) > 9999 ? 'Steady' : (per > 0 ? '+' : MINUS) + Math.abs(per).toFixed(Math.abs(per) < 100 ? 1 : 0) + ' s');
     $('r-period').className = 'ro-v' + (per > 0 && per < 10 ? ' danger' : per > 0 && per < 30 ? ' warn' : '');
     setText('r-fuel', thousands(s.tFuel) + ' °C');
     $('r-fuel').className = 'ro-v' + (s.tPeak > 2400 || s.tClad > 900 ? ' danger' : s.tPeak > 2000 ? ' warn' : '');

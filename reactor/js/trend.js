@@ -1,11 +1,15 @@
 // Trend chart: three small charts stacked on one time axis (power, coolant
 // temperature, pressure), two series each, with a crosshair and a tooltip
-// that lists every series at the time under the pointer.
+// that lists every series at the time under the pointer. It is pixel art
+// like the plant: everything is drawn in blocks on a grid of 2 CSS px, the
+// lines as staircases one block thick, and the text in the page's pixel font.
 (function (root) {
   'use strict';
 
+  const U = 2; // one pixel of the page
+  const FONT = '16px "Reactor Pixel", Tiny5, monospace';
   const SERIES_1 = '#3987e5', SERIES_2 = '#d95926';
-  const INK = '#eef2f6', INK_2 = '#c3cad6', MUTED = '#8792a5', GRID = 'rgba(255,255,255,0.07)', AXIS = 'rgba(255,255,255,0.18)';
+  const INK_2 = '#c3cad6', MUTED = '#8792a5', GRID = '#263550', AXIS = '#3a4c72', CROSS = '#8b98b0', PANEL = '#101a2c';
   const PANELS = [
     { title: 'Power, % of full', unit: '%', digits: 1, fixedMin: 0, minSpan: 110,
       series: [{ key: 'heat', name: 'Heat', color: SERIES_1 }, { key: 'elec', name: 'Electricity', color: SERIES_2 }] },
@@ -100,12 +104,33 @@
     const data = all.slice(Math.max(0, first - 1));
     if (this.spanEl) this.spanEl.textContent = spanText(span);
 
-    const left = 44, right = 86, top = 4, gapY = 20, axisH = 18;
-    const panelH = (h - top - axisH - gapY * (PANELS.length - 1)) / PANELS.length;
-    const plotW = w - left - right;
-    const x = function (t) { return left + (t - t0) / span * plotW; };
-    g.font = '11px Inter, system-ui, sans-serif';
-    g.textBaseline = 'middle';
+    // Everything below is placed in whole blocks.
+    const snap = function (v) { return Math.round(v / U) * U; };
+    const block = function (x, y, bw, bh) { g.fillRect(x, y, bw || U, bh || U); };
+    const narrow = w < 520;
+    const left = 40, right = narrow ? 92 : 96, top = 0, gapY = 12, axisH = 20, titleH = 24;
+    const panelH = snap((h - top - axisH - gapY * (PANELS.length - 1)) / PANELS.length);
+    const plotW = snap(w - left - right);
+    const cols = plotW / U;
+    g.font = FONT;
+    g.textBaseline = 'alphabetic';
+    // Text sits on whole pixels, 12px of it above the baseline.
+    const text = function (str, x, y, align) {
+      g.textAlign = align || 'left';
+      g.fillText(str, Math.round(x), Math.round(y) + 12);
+    };
+
+    // The value of `key` at time t, on the straight line between samples.
+    let at = 0;
+    const value = function (key, t) {
+      while (at < data.length - 2 && data[at + 1].t < t) at++;
+      const a = data[at], b = data[Math.min(at + 1, data.length - 1)];
+      if (b.t <= a.t) return a[key];
+      const k = Math.max(0, Math.min(1, (t - a.t) / (b.t - a.t)));
+      return a[key] + (b[key] - a[key]) * k;
+    };
+    const tFirst = Math.max(t0, data[0].t);
+    const col = function (t) { return Math.max(0, Math.min(cols - 1, Math.round((t - t0) / span * (cols - 1)))); };
 
     // Crosshair: snap to the nearest sample.
     let hoverS = null;
@@ -120,8 +145,7 @@
 
     PANELS.forEach(function (pn, pi) {
       const py = top + pi * (panelH + gapY);
-      const titleH = 16;
-      const y0 = py + titleH, y1 = py + panelH;
+      const y0 = py + titleH, y1 = py + panelH - U;
       // Range from what is on screen.
       let lo = Infinity, hi = -Infinity;
       data.forEach(function (d) {
@@ -132,82 +156,78 @@
       const step = niceStep(hi - lo);
       lo = Math.floor(lo / step) * step;
       hi = Math.ceil(hi / step) * step;
-      const y = function (v) { return y1 - (v - lo) / (hi - lo) * (y1 - y0); };
+      const y = function (v) { return snap(y1 - (v - lo) / (hi - lo) * (y1 - y0)); };
 
       // Title and legend.
       g.fillStyle = INK_2;
-      g.textAlign = 'left';
-      g.font = '600 11.5px Inter, system-ui, sans-serif';
-      g.fillText(pn.title, left, py + 7);
-      let lx = left + g.measureText(pn.title).width + 14;
-      g.font = '11px Inter, system-ui, sans-serif';
+      text(pn.title, left, py);
+      let lx = left + snap(g.measureText(pn.title).width) + 16;
       pn.series.forEach(function (sr) {
-        g.strokeStyle = sr.color; g.lineWidth = 2;
-        g.beginPath(); g.moveTo(lx, py + 7); g.lineTo(lx + 12, py + 7); g.stroke();
+        if (narrow) return; // the line ends are labelled, which is enough on a phone
+        g.fillStyle = sr.color;
+        block(lx, py + 6, 8, 8);
         g.fillStyle = MUTED;
-        g.fillText(sr.name, lx + 16, py + 7);
-        lx += 16 + g.measureText(sr.name).width + 12;
+        text(sr.name, lx + 12, py);
+        lx += 12 + snap(g.measureText(sr.name).width) + 14;
       });
 
-      // Grid and ticks.
-      g.lineWidth = 1;
+      // Grid: dotted lines, a solid one along the bottom, and the scale.
       for (let v = lo; v <= hi + 1e-9; v += step) {
-        const yy = Math.round(y(v)) + 0.5;
-        g.strokeStyle = v === lo ? AXIS : GRID;
-        g.beginPath(); g.moveTo(left, yy); g.lineTo(left + plotW, yy); g.stroke();
+        const yy = y(v);
+        if (v === lo) { g.fillStyle = AXIS; block(left, yy, plotW, U); }
+        else { g.fillStyle = GRID; for (let x = 0; x < plotW; x += 3 * U) block(left + x, yy); }
         g.fillStyle = MUTED;
-        g.textAlign = 'right';
-        g.fillText(+v.toFixed(2) + '', left - 6, yy);
+        text(+v.toFixed(2) + '', left - 8, yy - 8, 'right');
       }
 
-      // Lines, clipped to the plot.
-      g.save();
-      g.beginPath(); g.rect(left, y0 - 2, plotW, y1 - y0 + 4); g.clip();
+      // Lines: one block per column, joined up and down so they never break.
+      const c0 = col(tFirst), c1 = col(tEnd);
       pn.series.forEach(function (sr) {
-        g.strokeStyle = sr.color;
-        g.lineWidth = 2;
-        g.lineJoin = 'round';
-        g.beginPath();
-        data.forEach(function (d, i) {
-          const xx = x(d.t), yy = y(d[sr.key]);
-          if (i === 0) g.moveTo(xx, yy); else g.lineTo(xx, yy);
-        });
-        g.stroke();
+        g.fillStyle = sr.color;
+        at = 0;
+        let prev = null;
+        for (let i = c0; i <= c1; i++) {
+          const t = c1 === c0 ? tEnd : tFirst + (tEnd - tFirst) * (i - c0) / (c1 - c0);
+          const yy = Math.max(y0 - U, Math.min(y1, y(value(sr.key, t))));
+          if (prev === null || prev === yy) block(left + i * U, yy);
+          else if (yy > prev) block(left + i * U, prev + U, U, yy - prev);
+          else block(left + i * U, yy, U, prev - yy);
+          prev = yy;
+        }
       });
-      g.restore();
 
       // Direct labels at the line ends, nudged apart.
       const last = data[data.length - 1];
       const ends = pn.series.map(function (sr) { return { sr: sr, y: y(last[sr.key]) }; }).sort(function (a, b) { return a.y - b.y; });
-      for (let i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < 13) ends[i].y = ends[i - 1].y + 13;
+      for (let i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < 16) ends[i].y = ends[i - 1].y + 16;
+      const over = ends[ends.length - 1].y - (y1 + U);
+      if (over > 0) ends.forEach(function (e) { e.y -= over; });
       ends.forEach(function (e) {
-        const yy = Math.max(y0 + 4, Math.min(y1 + 2, e.y));
+        const yy = Math.max(y0 - 4, e.y);
+        g.fillStyle = e.sr.color;
+        block(left + plotW + 6, yy - 2, 6, 6);
         g.fillStyle = INK_2;
-        g.textAlign = 'left';
-        g.fillText(e.sr.name, left + plotW + 8, yy);
+        text(e.sr.name, left + plotW + 18, yy - 8);
       });
 
       if (hoverS) {
-        const xx = Math.round(x(hoverS.t)) + 0.5;
-        g.strokeStyle = 'rgba(255,255,255,0.45)';
-        g.lineWidth = 1;
-        g.beginPath(); g.moveTo(xx, y0 - 2); g.lineTo(xx, y1); g.stroke();
+        const xx = left + col(hoverS.t) * U;
+        g.fillStyle = CROSS;
+        for (let yy = y0 - U; yy < y1; yy += 2 * U) block(xx, yy);
         pn.series.forEach(function (sr) {
+          const yy = y(hoverS[sr.key]);
+          g.fillStyle = PANEL;
+          block(xx - 4, yy - 4, 10, 10);
           g.fillStyle = sr.color;
-          g.strokeStyle = '#0f1828';
-          g.lineWidth = 2;
-          g.beginPath(); g.arc(xx, y(hoverS[sr.key]), 4, 0, Math.PI * 2); g.fill(); g.stroke();
+          block(xx - 2, yy - 2, 6, 6);
         });
       }
     });
 
     // Time axis.
     g.fillStyle = MUTED;
-    g.textAlign = 'left';
-    const tStart = Math.max(t0, data[0].t);
-    g.fillText(clock(tStart), x(tStart), h - axisH / 2);
-    g.textAlign = 'right';
-    g.fillText(clock(tEnd), left + plotW, h - axisH / 2);
+    text(clock(tEnd), left + plotW, h - axisH + 2, 'right');
+    if (col(tEnd) - col(tFirst) > 60) text(clock(tFirst), left + col(tFirst) * U, h - axisH + 2);
 
     // Tooltip.
     const tip = this.tip;
@@ -235,10 +255,10 @@
         tip.appendChild(row);
       });
     });
-    const tx = x(hoverS.t);
+    const tx = left + col(hoverS.t) * U;
     const tw = tip.offsetWidth;
-    tip.style.left = (tx + 12 + tw > w ? tx - 12 - tw : tx + 12) + 'px';
-    tip.style.top = '16px';
+    tip.style.left = snap(tx + 12 + tw > w ? tx - 12 - tw : tx + 12) + 'px';
+    tip.style.top = '24px';
   };
 
   root.ReactorTrend = { TrendChart: TrendChart, clock: clock };

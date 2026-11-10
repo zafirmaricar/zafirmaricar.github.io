@@ -142,11 +142,14 @@
     canvas.style.width = w + 'px';
     canvas.style.height = h + 'px';
     scene.style.setProperty('--px', (w / Art.W).toFixed(4));
+    // Label text: whole pixels, never under 2 (Tiny5 at 16px).
+    scene.style.setProperty('--lpx', Math.max(2, Math.floor(w / Art.W + 0.25)));
     // On phones the briefing sits above the desk instead of over the small scene.
     const brief = document.getElementById('brief');
     const home = narrow ? document.getElementById('desk') : scene;
     if (brief.parentNode !== home) home.insertBefore(brief, home.firstChild);
     if (ui.cardPart) ui.closeCard();
+    ui.fitLabels();
     trend.dirty = true;
   }
   let layoutQueued = false;
@@ -158,6 +161,10 @@
   window.addEventListener('resize', queueLayout);
   window.addEventListener('orientationchange', queueLayout);
   if (window.ResizeObserver) new window.ResizeObserver(queueLayout).observe(sceneBox);
+  // The pixel fonts change the bar's height and the charts' text once they load.
+  if (document.fonts && document.fonts.load) {
+    Promise.all([document.fonts.load('16px Tiny5'), document.fonts.load('16px "Press Start 2P"'), document.fonts.load('16px "Reactor Pixel"', '%')]).then(queueLayout, function () {});
+  }
 
   // ---------------------------------------------------------------------------
   // Pointing at the plant: hover outlines a part, a tap opens its card, and
