@@ -1,13 +1,14 @@
 // Trend chart: three small charts stacked on one time axis (power, coolant
 // temperature, pressure), two series each, with a crosshair and a tooltip
 // that lists every series at the time under the pointer. It is pixel art
-// like the plant: everything is drawn in blocks on a grid of 2 CSS px, the
-// lines as staircases one block thick, and the text in the page's pixel font.
+// like the plant: everything is drawn on whole pixels with no smoothing, the
+// lines as staircases two pixels thick, and the text in the page's pixel font.
 (function (root) {
   'use strict';
 
-  const U = 2; // one pixel of the page
-  const FONT = '16px "Reactor Pixel", Tiny5, monospace';
+  const U = 1; // one pixel of the page
+  const T = 2; // line thickness
+  const FONT = (56 / 3) + 'px "Jersey 10", "Reactor Pixel", monospace';
   const SERIES_1 = '#3987e5', SERIES_2 = '#d95926';
   const INK_2 = '#c3cad6', MUTED = '#8792a5', GRID = '#263550', AXIS = '#3a4c72', CROSS = '#8b98b0', PANEL = '#101a2c';
   const PANELS = [
@@ -174,13 +175,13 @@
       // Grid: dotted lines, a solid one along the bottom, and the scale.
       for (let v = lo; v <= hi + 1e-9; v += step) {
         const yy = y(v);
-        if (v === lo) { g.fillStyle = AXIS; block(left, yy, plotW, U); }
-        else { g.fillStyle = GRID; for (let x = 0; x < plotW; x += 3 * U) block(left + x, yy); }
+        if (v === lo) { g.fillStyle = AXIS; block(left, yy, plotW, 2); }
+        else { g.fillStyle = GRID; for (let x = 0; x < plotW; x += 6) block(left + x, yy, 2, 2); }
         g.fillStyle = MUTED;
         text(+v.toFixed(2) + '', left - 8, yy - 8, 'right');
       }
 
-      // Lines: one block per column, joined up and down so they never break.
+      // Lines: one step per column, joined up and down so they never break.
       const c0 = col(tFirst), c1 = col(tEnd);
       pn.series.forEach(function (sr) {
         g.fillStyle = sr.color;
@@ -189,9 +190,9 @@
         for (let i = c0; i <= c1; i++) {
           const t = c1 === c0 ? tEnd : tFirst + (tEnd - tFirst) * (i - c0) / (c1 - c0);
           const yy = Math.max(y0 - U, Math.min(y1, y(value(sr.key, t))));
-          if (prev === null || prev === yy) block(left + i * U, yy);
-          else if (yy > prev) block(left + i * U, prev + U, U, yy - prev);
-          else block(left + i * U, yy, U, prev - yy);
+          if (prev === null || prev === yy) block(left + i * U, yy, U, T);
+          else if (yy > prev) block(left + i * U, prev + U, U, yy - prev + T - U);
+          else block(left + i * U, yy, U, prev - yy + T - U);
           prev = yy;
         }
       });
@@ -213,7 +214,7 @@
       if (hoverS) {
         const xx = left + col(hoverS.t) * U;
         g.fillStyle = CROSS;
-        for (let yy = y0 - U; yy < y1; yy += 2 * U) block(xx, yy);
+        for (let yy = y0 - 2; yy < y1; yy += 4) block(xx, yy, 2, 2);
         pn.series.forEach(function (sr) {
           const yy = y(hoverS[sr.key]);
           g.fillStyle = PANEL;

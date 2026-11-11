@@ -61,8 +61,11 @@
     return 'rgb(' + c.join(',') + ')';
   }
 
+  // Icons are 12 × 12 sprites, shown four times finer (see upscale.js).
+  let iconPad = null;
   function drawIcon(canvas, name, color, hi) {
-    const g = canvas.getContext('2d');
+    if (!iconPad) { iconPad = document.createElement('canvas'); iconPad.width = iconPad.height = 12; }
+    const g = iconPad.getContext('2d', { willReadFrequently: true });
     const rows = ICONS[name] || ICONS.trophy;
     g.clearRect(0, 0, 12, 12);
     for (let y = 0; y < 12; y++) {
@@ -74,6 +77,11 @@
         g.fillRect(x, y, 1, 1);
       }
     }
+    const src = new Uint32Array(g.getImageData(0, 0, 12, 12).data.buffer);
+    canvas.width = canvas.height = 48;
+    const to = canvas.getContext('2d'), img = to.createImageData(48, 48);
+    new root.ReactorUpscale.Upscaler(12, 12, 4).run(src, new Uint32Array(img.data.buffer));
+    to.putImageData(img, 0, 0);
   }
 
   function iconCanvas(cls) {

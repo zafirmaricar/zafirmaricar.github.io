@@ -9,8 +9,20 @@
 
   const canvas = document.getElementById('plant');
   const ctx = canvas.getContext('2d', { alpha: false });
-  const img = ctx.createImageData(Art.W, Art.H);
-  const px = new Uint32Array(img.data.buffer);
+  // The renderer draws the plant at 480 × 270; the page shows it two to four
+  // times finer (see upscale.js), picked in layout() to suit the screen.
+  const px = new Uint32Array(Art.W * Art.H);
+  let fine = 0, img = null, out = null, upscaler = null;
+  function setFine(k) {
+    if (k === fine) return;
+    fine = k;
+    canvas.width = Art.W * k;
+    canvas.height = Art.H * k;
+    img = ctx.createImageData(canvas.width, canvas.height);
+    out = new Uint32Array(img.data.buffer);
+    upscaler = new window.ReactorUpscale.Upscaler(Art.W, Art.H, k);
+  }
+  setFine(2);
   const sceneBox = document.getElementById('scene-box');
   const scene = document.getElementById('scene');
 
@@ -142,8 +154,14 @@
     canvas.style.width = w + 'px';
     canvas.style.height = h + 'px';
     scene.style.setProperty('--px', (w / Art.W).toFixed(4));
-    // Label text: whole pixels, never under 2 (Tiny5 at 16px).
-    scene.style.setProperty('--lpx', Math.max(2, Math.floor(w / Art.W + 0.25)));
+    // As many finer pixels as the screen can show, drawn one to one when the
+    // size is a whole multiple and scaled down smoothly when it isn't.
+    const shown = Math.round(w * dpr);
+    const finer = Math.max(2, Math.min(4, Math.ceil(shown / Art.W - 0.02)));
+    setFine(finer);
+    canvas.style.imageRendering = shown === Art.W * finer ? 'pixelated' : 'auto';
+    // Label size steps with the plant: 2, 3 or 4.
+    scene.dataset.lpx = Math.max(2, Math.min(4, Math.floor(w / Art.W + 0.25)));
     // On phones the briefing sits above the desk instead of over the small scene.
     const brief = document.getElementById('brief');
     const home = narrow ? document.getElementById('desk') : scene;
@@ -163,7 +181,7 @@
   if (window.ResizeObserver) new window.ResizeObserver(queueLayout).observe(sceneBox);
   // The pixel fonts change the bar's height and the charts' text once they load.
   if (document.fonts && document.fonts.load) {
-    Promise.all([document.fonts.load('16px Tiny5'), document.fonts.load('16px "Press Start 2P"'), document.fonts.load('16px "Reactor Pixel"', '%')]).then(queueLayout, function () {});
+    Promise.all([document.fonts.load('18px "Jersey 10"'), document.fonts.load('27px "Jersey 15"'), document.fonts.load('18px "Reactor Pixel"', '\u00b1')]).then(queueLayout, function () {});
   }
 
   // ---------------------------------------------------------------------------
@@ -286,6 +304,7 @@
     view.alarm = ui.unacked > 0;
     view.shake = now < shakeUntil;
     renderer.draw(px, s, app.paused ? 0 : dt, view);
+    upscaler.run(px, out);
     ctx.putImageData(img, 0, 0);
 
     ui.frame(s, app.paused ? 0 : app.speed);
